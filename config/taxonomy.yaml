@@ -1,0 +1,156 @@
+# ---------------------------------------------------------------------------
+# Cross-asset concept taxonomy (a lightweight, governed ontology)
+# ---------------------------------------------------------------------------
+# Concepts are the BRIDGES of the knowledge graph. "Cooling Efficiency" shows up
+# in office chiller plants, data-centre CRAH units and senior-living fan-coil
+# units, so linking documents to shared concepts lets the system surface
+# solutions from other asset classes even when the wording differs.
+#
+#   parent      -> concept hierarchy (exported as skos:broader in RDF)
+#   related     -> "is typically addressed by / goes together with" links (skos:related).
+#                  Questions about a concept also explore its related concepts, e.g. a
+#                  question about breakdowns reaches predictive-maintenance solutions.
+#   aliases     -> phrases used to tag documents and questions (case-insensitive,
+#                  whole-word matching). Curated by the Knowledge Steward.
+#   systems     -> physical building systems (Brick Schema-inspired) that act as
+#                  a second kind of bridge ("both involve chiller plants").
+# ---------------------------------------------------------------------------
+
+concepts:
+  energy_optimisation:
+    label: Energy Optimisation
+    related: [smart_monitoring]
+    description: Reducing energy use and improving the energy efficiency of building and facility systems.
+    aliases: [energy efficiency, energy consumption, energy use, energy usage, energy saving, energy savings,
+              energy performance, energy optimisation, energy optimization, energy conservation, kwh, gwh, mwh,
+              eei, eui, energy intensity, electricity consumption, electricity use, energy cost, energy costs]
+
+  cooling_efficiency:
+    label: Cooling Efficiency
+    parent: energy_optimisation
+    description: Efficiency of cooling and air-conditioning plant and air distribution - chillers, cooling towers,
+      CRAH/AHU units, containment and temperature setpoints.
+    aliases: [cooling, chiller, chillers, chilled water, chilled-water, hvac, air-conditioning, air conditioning, crah, crac,
+              pue, supply air temperature, setpoint, setpoints, set-point, containment, kw/rt, cooling load,
+              overcooling, fan coil, fan coil units, dehumidification]
+
+  equipment_reliability:
+    label: Equipment Reliability
+    related: [predictive_maintenance]
+    description: Preventing breakdowns, trips and unplanned downtime of critical equipment.
+    aliases: [failure, failures, breakdown, breakdowns, breaking down, break down, broke down, downtime, fault, faults,
+              unplanned, trip, trips, tripped, mtbf, reliability, root cause, availability]
+
+  predictive_maintenance:
+    label: Predictive Maintenance
+    parent: equipment_reliability
+    description: Condition monitoring and analytics that detect incipient equipment faults before they cause failures.
+    aliases: [predictive maintenance, condition monitoring, condition-based, condition-based maintenance, vibration,
+              acoustic, anomaly detection, anomaly, early warning, failure prediction, predict failures,
+              incipient fault, incipient faults, remaining useful life]
+
+  vertical_transportation:
+    label: Vertical Transportation
+    parent: equipment_reliability
+    description: Lifts, elevators and escalators - availability, entrapments and maintenance.
+    aliases: [lift, lifts, elevator, elevators, escalator, escalators, entrapment, entrapments, door operator,
+              door operators]
+
+  water_management:
+    label: Water Management
+    description: Water efficiency and water quality, especially cooling-tower make-up water, blowdown and
+      Legionella control.
+    aliases: [water consumption, water use, water usage, water efficiency, wue, cooling tower, cooling towers,
+              make-up water, blowdown, bleed-off, cycles of concentration, newater, legionella, water treatment,
+              potable water]
+
+  occupant_experience:
+    label: Occupant Comfort & Experience
+    description: Thermal comfort, indoor environment and satisfaction of tenants, residents and customers.
+    aliases: [comfort, thermal comfort, complaint, complaints, tenant, tenants, resident, residents, satisfaction,
+              humidity, indoor air quality, iaq, nps, net promoter score, customer, customers, family, families,
+              communication]
+
+  smart_monitoring:
+    label: Smart Monitoring & Analytics
+    description: BMS/DCIM integration, IoT sensors, dashboards, digital twins and AI/ML analytics for operations.
+    aliases: [bms, building management system, dcim, iot, sensor, sensors, analytics, dashboard, dashboards,
+              digital twin, machine learning, ai-driven, ai, data silos, real-time, fault detection, cmms]
+
+  decarbonisation:
+    label: Renewables & Decarbonisation
+    related: [energy_optimisation]
+    description: Carbon reduction, renewable electricity procurement and green building certification.
+    aliases: [carbon, emissions, decarbonisation, decarbonization, net zero, net-zero, renewable, renewables, solar,
+              photovoltaic, ppa, ppas, recs, green mark, scope 2, tco2e, heat reuse]
+
+  power_resilience:
+    label: Power Resilience
+    description: Continuity of electrical supply - UPS, batteries, standby generators and outage response.
+    aliases: [ups, uninterruptible power, battery, batteries, generator, generators, power outage, power failure,
+              blackout, switchgear, standby power, thermal runaway, emergency power]
+
+  maintenance_governance:
+    label: Maintenance Change Control
+    description: Safe execution of maintenance works - method statements, permits, contractor control and
+      communication of works.
+    aliases: [method of procedure, mop, mops, permit-to-work, permit to work, work permit, contractor, contractors,
+              change control, sop, standard operating procedure, human error, pre-task briefing, rollback,
+              maintenance works]
+
+  financial_performance:
+    label: Financial Performance
+    description: Costs, savings, business cases and returns on operational and capital investments.
+    aliases: [capex, opex, payback, roi, npv, irr, cost saving, cost savings, business case, budget, tariff,
+              investment, net property income, valuation]
+
+systems:
+  chiller_plant:
+    label: Chiller Plant
+    brick_class: Chiller
+    concepts: [cooling_efficiency]
+    aliases: [chiller, chillers, chiller plant, chilled water plant, chilled-water plant, compressor, compressors]
+  cooling_tower:
+    label: Cooling Towers
+    brick_class: Cooling_Tower
+    concepts: [cooling_efficiency, water_management]
+    aliases: [cooling tower, cooling towers]
+  air_handling:
+    label: AHU / CRAH / Fan Coil Units
+    brick_class: AHU
+    concepts: [cooling_efficiency]
+    aliases: [ahu, ahus, air handling unit, air handling units, crah, crahs, crac, fan coil, fan coil units, fcu, fcus]
+  pumps_drives:
+    label: Pumps & Variable Speed Drives
+    brick_class: Pump
+    concepts: [energy_optimisation]
+    aliases: [pump, pumps, variable speed drive, variable speed drives, vsd, vsds, vfd]
+  bms_dcim:
+    label: BMS / DCIM
+    concepts: [smart_monitoring]
+    aliases: [bms, building management system, dcim]
+  iot_sensors:
+    label: IoT & Condition Sensors
+    concepts: [smart_monitoring, predictive_maintenance]
+    aliases: [iot, sensor, sensors, accelerometer, accelerometers]
+  lifts:
+    label: Lifts & Escalators
+    concepts: [vertical_transportation]
+    aliases: [lift, lifts, elevator, elevators, escalator, escalators]
+  ups_batteries:
+    label: UPS & Batteries
+    brick_class: Battery
+    concepts: [power_resilience]
+    aliases: [ups, uninterruptible power, battery, batteries]
+  standby_generator:
+    label: Standby Generators
+    concepts: [power_resilience]
+    aliases: [generator, generators, genset]
+  solar_pv:
+    label: Solar PV
+    concepts: [decarbonisation]
+    aliases: [solar pv, photovoltaic, rooftop solar, solar panels]
+  hot_water:
+    label: Hot Water & Heat Pumps
+    concepts: [energy_optimisation]
+    aliases: [hot water, heat pump, heat pumps, water heaters]

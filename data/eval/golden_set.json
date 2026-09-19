@@ -1,0 +1,85 @@
+{
+  "description": "Golden questions for Keppel Knowledge Bridge. expected_docs = precedents a domain expert would expect; forbidden_docs = documents the asking role must never see; expect_abstain = the knowledge base has no answer (null = not scored).",
+  "cases": [
+    {
+      "id": "EV-01", "user": "alex.tan", "theme": "Cross-asset transfer",
+      "question": "How can we reduce cooling energy consumption in our data centre?",
+      "expected_docs": ["DC-01", "OFF-01"], "expected_asset_types": ["Data Centre", "Office"]
+    },
+    {
+      "id": "EV-02", "user": "priya.nair", "theme": "Cross-asset transfer (graph)",
+      "question": "Our lifts keep breaking down and residents are getting stranded. How can we reduce lift downtime?",
+      "expected_docs": ["SL-02", "OFF-04", "DC-03"], "expected_asset_types": ["Senior Living", "Office", "Data Centre"]
+    },
+    {
+      "id": "EV-03", "user": "daniel.ong", "theme": "Lessons learned",
+      "question": "What went wrong when temperature setpoints were raised, and how do we avoid complaints?",
+      "expected_docs": ["OFF-03", "SL-03", "DC-01"], "expected_asset_types": ["Office", "Senior Living", "Data Centre"]
+    },
+    {
+      "id": "EV-04", "user": "alex.tan", "theme": "Cross-asset transfer",
+      "question": "How do we reduce water consumption in our cooling towers?",
+      "expected_docs": ["DC-04", "OFF-06"], "expected_asset_types": ["Data Centre", "Office"]
+    },
+    {
+      "id": "EV-05", "user": "priya.nair", "theme": "Cross-asset transfer",
+      "question": "How should we prepare for power outages to protect residents and critical equipment?",
+      "expected_docs": ["SL-05", "DC-05"], "expected_asset_types": ["Senior Living", "Data Centre"]
+    },
+    {
+      "id": "EV-06", "user": "alex.tan", "theme": "Predictive maintenance",
+      "question": "How can we detect equipment failures before they happen?",
+      "expected_docs": ["DC-03", "DC-02", "OFF-04"], "expected_asset_types": ["Data Centre", "Office"]
+    },
+    {
+      "id": "EV-07", "user": "priya.nair", "theme": "Customer experience",
+      "question": "How do we reduce complaints from families about maintenance works?",
+      "expected_docs": ["SL-04", "LES-02", "DC-07"], "expected_asset_types": ["Senior Living", "Data Centre"]
+    },
+    {
+      "id": "EV-08", "user": "daniel.ong", "theme": "Cross-asset transfer",
+      "question": "How can we reduce human error during planned maintenance works?",
+      "expected_docs": ["DC-07"], "expected_asset_types": ["Data Centre"]
+    },
+    {
+      "id": "EV-09", "user": "priya.nair", "theme": "Cross-asset transfer",
+      "question": "How can we cut air-conditioning energy without making elderly residents uncomfortable?",
+      "expected_docs": ["SL-03", "OFF-03"], "expected_asset_types": ["Senior Living", "Office"]
+    },
+    {
+      "id": "EV-10", "user": "sarah.lim", "theme": "Tacit knowledge",
+      "question": "What practical rules of thumb should operators follow when running a chilled-water plant?",
+      "expected_docs": ["LES-01", "OFF-01"], "expected_asset_types": ["Office"]
+    },
+    {
+      "id": "EV-11", "user": "alex.tan", "theme": "RBAC - Engineer",
+      "question": "What was the payback period of the chiller plant retrofit and should we replicate it?",
+      "expected_docs": ["OFF-01"], "forbidden_docs": ["OFF-05", "SL-06", "DC-06"], "expected_asset_types": ["Office"]
+    },
+    {
+      "id": "EV-12", "user": "marcus.lee", "theme": "RBAC - Manager",
+      "question": "What was the payback period of the chiller plant retrofit and should we replicate it?",
+      "expected_docs": ["OFF-05"], "forbidden_docs": ["OFF-01", "DC-02", "DC-03"], "expected_asset_types": ["Office"]
+    },
+    {
+      "id": "EV-13", "user": "alex.tan", "theme": "RBAC - Engineer",
+      "question": "What is our renewable energy procurement strategy for the data centre portfolio?",
+      "expected_docs": [], "forbidden_docs": ["DC-06"], "expect_abstain": null
+    },
+    {
+      "id": "EV-14", "user": "marcus.lee", "theme": "RBAC - Manager",
+      "question": "What is our renewable energy procurement strategy for the data centre portfolio?",
+      "expected_docs": ["DC-06"], "expected_asset_types": ["Data Centre"]
+    },
+    {
+      "id": "EV-15", "user": "alex.tan", "theme": "Out of scope",
+      "question": "What is the best recipe for chicken rice?",
+      "expected_docs": [], "expect_abstain": true
+    },
+    {
+      "id": "EV-16", "user": "priya.nair", "theme": "Out of scope",
+      "question": "Who won the football World Cup in 2022?",
+      "expected_docs": [], "expect_abstain": true
+    }
+  ]
+}

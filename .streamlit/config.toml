@@ -1,0 +1,13 @@
+[theme]
+base = "light"
+primaryColor = "#0b3d62"
+backgroundColor = "#f9f9f7"
+secondaryBackgroundColor = "#f1f0ec"
+textColor = "#0b0b0b"
+
+[server]
+# Headless skips Streamlit's first-run e-mail prompt; open http://localhost:8501 yourself.
+headless = true
+
+[browser]
+gatherUsageStats = false

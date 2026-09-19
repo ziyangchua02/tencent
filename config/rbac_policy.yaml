@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# Keppel Knowledge Bridge AI - Role-Based Access Control policy
+# ---------------------------------------------------------------------------
+# Every document carries ONE `classification`. A user may retrieve a document
+# only if that classification is listed under their role. Enforcement happens
+# inside the vector search (pre-filter), so restricted text never reaches the
+# LLM prompt, the knowledge-graph view or the citations.
+#
+# In production, roles map to identity-provider groups (Tencent CAM, Azure AD,
+# Okta...) and the demo `users` list below is replaced by SSO/JWT claims.
+# ---------------------------------------------------------------------------
+
+classifications:
+  Technical: Engineering studies, optimisation reports and design documents
+  Maintenance: Maintenance records, failure logs and root-cause analyses
+  Operational: Lessons learned, facility-management and customer-experience reports
+  Financial: Business cases, budgets, capex/opex and payback analyses
+  Strategic: Portfolio strategy, procurement and investment roadmaps
+
+# permissions:
+#   ask          - query the assistant
+#   contribute   - upload PDFs / capture expert lessons (queued for review
+#                  unless the user can also approve)
+#   approve      - approve or reject contributions in the review queue
+#   view_audit   - read the audit trail and knowledge-gap report
+#   run_eval     - run the evaluation suite
+roles:
+  Engineer:
+    description: Facilities / M&E engineers who operate assets day to day
+    classifications: [Technical, Maintenance, Operational]
+    permissions: [ask, contribute]
+  Manager:
+    description: Asset & portfolio managers accountable for performance and investment
+    classifications: [Financial, Strategic, Operational]
+    permissions: [ask, contribute]
+  Knowledge Steward:
+    description: Knowledge-governance lead who curates, approves and audits the knowledge base
+    classifications: [Technical, Maintenance, Operational, Financial, Strategic]
+    permissions: [ask, contribute, approve, view_audit, run_eval]
+
+# Simulated identities for the demo (select one in the UI sidebar).
+users:
+  - id: alex.tan
+    name: Alex Tan
+    role: Engineer
+    title: Data Centre Facilities Engineer
+    home_asset_type: Data Centre
+  - id: priya.nair
+    name: Priya Nair
+    role: Engineer
+    title: Senior Living Facilities Engineer
+    home_asset_type: Senior Living
+  - id: daniel.ong
+    name: Daniel Ong
+    role: Engineer
+    title: Office M&E Engineer
+    home_asset_type: Office
+  - id: marcus.lee
+    name: Marcus Lee
+    role: Manager
+    title: Asset Manager, Office & Data Centre Portfolio
+    home_asset_type: Office
+  - id: sarah.lim
+    name: Sarah Lim
+    role: Knowledge Steward
+    title: Head of Knowledge Governance
+    home_asset_type: null

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Runtime state (rebuilt automatically: database, FAISS index, uploads, eval report, model cache)
+data/store/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

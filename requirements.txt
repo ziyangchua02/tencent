@@ -1,0 +1,35 @@
+# Keppel Knowledge Bridge AI - tested with Python 3.12 on macOS (arm64), September 2026.
+# Lower bounds = versions verified in development; upper bounds guard against breaking majors.
+
+# --- API ---------------------------------------------------------------------
+fastapi>=0.141,<1.0
+uvicorn[standard]>=0.53,<1.0
+pydantic>=2.13,<3
+pydantic-settings>=2.15,<3
+python-multipart>=0.0.32        # PDF upload forms
+sqlalchemy>=2.0.54,<3           # SQLite now, PostgreSQL via DATABASE_URL
+pyyaml>=6.0.3,<7
+python-dotenv>=1.2,<2           # .env loading (API + UI)
+
+# --- Ingestion ---------------------------------------------------------------
+pypdf>=6.19,<7
+
+# --- Retrieval & knowledge graph ---------------------------------------------
+numpy>=2.5,<3
+faiss-cpu>=1.15,<2
+fastembed>=0.8,<1               # local BAAI/bge-small-en-v1.5 embeddings (ONNX, no torch/GPU)
+networkx>=3.6,<4
+
+# --- LLM (Tencent TokenHub / Hunyuan via the OpenAI-compatible API) -----------
+openai>=3.16,<4
+
+# --- Frontend ----------------------------------------------------------------
+streamlit>=1.64,<2
+httpx>=0.28,<1
+pandas>=3.0,<4
+altair>=6.3,<7
+pyvis>=0.3.2,<0.4
+
+# --- Dataset generation & tests ----------------------------------------------
+reportlab>=5.0,<6
+pytest>=9.1,<10
