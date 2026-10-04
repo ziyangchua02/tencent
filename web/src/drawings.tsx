@@ -14,7 +14,7 @@ function useWidth<T extends HTMLElement>(initial: number) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    setW(Math.round(el.getBoundingClientRect().width) || initial);
+    setW(el.offsetWidth || initial); // layout px, unaffected by CSS zoom
     const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width) || initial));
     ro.observe(el);
     return () => ro.disconnect();

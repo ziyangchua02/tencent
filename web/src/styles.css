@@ -34,6 +34,8 @@
 * { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; }
 html { -webkit-text-size-adjust: 100%; }
+/* Whole UI at 80%, like browser zoom, on screens wider than phones (phones keep full-size text). */
+@media (min-width: 761px) { html { zoom: 0.8; } }
 body {
   margin: 0;
   background: var(--paper);
