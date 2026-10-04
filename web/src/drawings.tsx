@@ -59,8 +59,10 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
   const r = TOWER.boardRatings;
   const scale = (pct: number) => Math.min(pct, 125) / 125; // bars run 0–125% of rating
   const changed = (b: Board) => !!proposal && Math.abs(proposal.maxBoardPct[b] - today.maxBoardPct[b]) >= 2;
-  const marked = (b: Board) => !proposal && today.maxBoardPct[b] >= 90;
   const shown = proposal ?? today;
+  // Red markup on any board at or above 90% in what's shown, proposal or not; it outranks the blue revision cloud.
+  const marked = (b: Board) => shown.maxBoardPct[b] >= 90;
+  const revised = (b: Board) => changed(b) && !marked(b);
   const label = `Single-line diagram of ${TOWER.name}. ` + (Object.keys(r) as Board[]).map((b) =>
     `${BOARD_NAMES[b]}: peak ${Math.round(today.maxBoardPct[b])}% of rating today` +
     (proposal ? `, ${Math.round(proposal.maxBoardPct[b])}% with the proposal` : '') + ` (${STATUS_WORD[boardStatus(shown.maxBoardPct[b])]}).`).join(' ');
@@ -97,13 +99,13 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
           <text x={W / 2 + 20} y={36} className="sld-small sld-muted">Contracted capacity {kwNum(TOWER.contractedCapacityKw)} kW</text>
           <line x1={W / 2} x2={W / 2} y1={41} y2={msb.y} className="sld-wire" />
           {/* MSB */}
-          <rect x={msb.x} y={msb.y} width={msb.w} height={msb.h} className={`sld-box${changed('msb') ? ' sld-box--changed' : ''}`} />
+          <rect x={msb.x} y={msb.y} width={msb.w} height={msb.h} className={`sld-box${revised('msb') ? ' sld-box--changed' : ''}`} />
           <text x={msb.x + 12} y={msb.y + 21} className="sld-title">MSB · Main switchboard</text>
           <text x={msb.x + msb.w - 12} y={msb.y + 21} textAnchor="end" className="sld-pct">{pctText('msb')}</text>
           <text x={msb.x + 12} y={msb.y + 38} className="sld-small sld-muted">Rating {kwNum(r.msb)} kW</text>
           <text x={msb.x + msb.w - 12} y={msb.y + 38} textAnchor="end" className={`sld-status status-${status('msb')}`}>{STATUS_WORD[status('msb')]}</text>
           {bars('msb', msb.x + 12, msb.y + 48, msb.w - 24)}
-          {changed('msb') && <Revision x={msb.x} y={msb.y} w={msb.w} h={msb.h} rev={revision} />}
+          {revised('msb') && <Revision x={msb.x} y={msb.y} w={msb.w} h={msb.h} rev={revision} />}
           {marked('msb') && <Markup x={msb.x} y={msb.y} w={msb.w} h={msb.h} />}
           {/* busbar */}
           <line x1={W / 2} x2={W / 2} y1={msb.y + msb.h} y2={152} className="sld-wire" />
@@ -116,7 +118,7 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
               <g key={sub.key}>
                 <line x1={cx} x2={cx} y1={152} y2={BOX_Y} className="sld-wire" />
                 {b && <rect x={cx - 6} y={160} width={12} height={12} className="sld-breaker" />}
-                <rect x={x} y={BOX_Y} width={bw} height={BOX_H} className={`sld-box${b && changed(b) ? ' sld-box--changed' : ''}`} />
+                <rect x={x} y={BOX_Y} width={bw} height={BOX_H} className={`sld-box${b && revised(b) ? ' sld-box--changed' : ''}`} />
                 <text x={x + 10} y={BOX_Y + 20} className="sld-title">{sub.name}</text>
                 <text x={x + 10} y={BOX_Y + 37} className="sld-small">{sub.role}</text>
                 <text x={x + 10} y={BOX_Y + 53} className="sld-small sld-muted">{b ? `Rating ${kwNum(r[b])} kW` : `${kwNum(LOADS.baseKw)} kW constant`}</text>
@@ -125,7 +127,7 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
                     {bars(b, x + 10, BOX_Y + 64, bw - 20)}
                     <text x={x + 10} y={BOX_Y + 106} className="sld-pct">{pctText(b)}</text>
                     <text x={x + 10} y={BOX_Y + 122} className={`sld-status status-${status(b)}`}>{STATUS_WORD[status(b)]}</text>
-                    {changed(b) && <Revision x={x} y={BOX_Y} w={bw} h={BOX_H} rev={revision} />}
+                    {revised(b) && <Revision x={x} y={BOX_Y} w={bw} h={BOX_H} rev={revision} />}
                     {marked(b) && <Markup x={x} y={BOX_Y} w={bw} h={BOX_H} />}
                   </>
                 ) : (
@@ -137,13 +139,16 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
         </svg>
       </div>
       <figcaption className="sld-legend">
-        {proposal ? (
+        {proposal && (
           <>
             <span className="key"><span className="key-bar key-bar--today" />Today</span>
             <span className="key"><span className="key-bar key-bar--pill" />Proposal</span>
-            <span className="key"><span className="key-cloud key-cloud--rev" />Changed by this revision</span>
           </>
-        ) : (
+        )}
+        {(Object.keys(r) as Board[]).some(revised) && (
+          <span className="key"><span className="key-cloud key-cloud--rev" />Changed by this revision</span>
+        )}
+        {(Object.keys(r) as Board[]).some(marked) && (
           <span className="key"><span className="key-cloud key-cloud--markup" />Marked up: above 90% of rating</span>
         )}
         <span className="key"><span className="key-tick" />Board rating (100%)</span>
