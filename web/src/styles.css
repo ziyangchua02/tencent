@@ -546,7 +546,7 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .proposal > .disclosure { margin-top: var(--s5); }
 .simulation { position: sticky; top: 74px; }
 
-/* ---------- step 3: questions ---------- */
+/* ---------- step 2: questions ---------- */
 
 .questions { display: grid; gap: var(--s4); }
 .question-group { margin: 0; padding: var(--s3) var(--s4) var(--s4); background: var(--sheet); border: 1px solid var(--rule); }
@@ -559,7 +559,7 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .perspective--technical { color: var(--rev); }
 .perspective--general { color: var(--ink-2); }
 
-/* ---------- step 4 and the pill sheet ---------- */
+/* ---------- step 3 and the pill sheet ---------- */
 
 .confirm-side { display: grid; gap: var(--s4); position: sticky; top: 74px; }
 .confirm-check { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s4); background: var(--sheet); border: 2px solid var(--ink); font-weight: 600; cursor: pointer; }
@@ -700,10 +700,8 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
   .sld-bar--pill, .key-bar--pill { fill: Highlight; background: Highlight; }
 }
 
-/* ---------- step 3: comments the agent turns into plan changes ---------- */
+/* ---------- step 2: comments the agent turns into plan changes ---------- */
 
-.measures--compact .measure { padding-bottom: var(--s3); }
-.measures--compact .measure-gist { margin-bottom: 0; }
 .tuned { list-style: none; margin: var(--s2) 0 0 32px; padding: 6px 10px; display: grid; gap: 2px; background: var(--proposed-wash); border: 1px solid #c9d8ef; font-size: 0.88rem; }
 .measure-list .tuned, .pill-sheet .tuned { margin-left: 0; flex-basis: 100%; }
 .tuned-label { color: var(--ink-2); }

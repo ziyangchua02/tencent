@@ -14,7 +14,7 @@ import {
   Disclosure, Explained, FooterNav, Icon, LevelChip, NoteLine, overallLevel, Stamp, Stars, Stepper, when,
 } from './ui.tsx';
 
-const STEPS = ['Define problem', 'Pills & simulation', "Agent's questions", 'Confirm & send'];
+const STEPS = ['Define problem', 'Pills & questions', 'Confirm & send'];
 
 // ---------- my cases ----------
 
@@ -126,7 +126,7 @@ function CaseView({ c, pills }: { c: Case; pills: Pill[] }) {
 
 function Wizard({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel }) {
   const { query } = useLocation();
-  const reached = c.agent ? 3 : 0;
+  const reached = c.agent ? 2 : 0;
   const step = Math.min(reached, Math.max(0, Number(query.get('step') ?? 0) || 0));
   const setStep = (i: number) => go(`/cases/${c.id}?step=${i}`);
   return (
@@ -134,9 +134,8 @@ function Wizard({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel 
       {c.decisions.at(-1)?.decision === 'returned' && <ReturnedNote c={c} compact />}
       <Stepper steps={STEPS} current={step} reached={reached} onJump={setStep} label="Engineer steps" />
       {step === 0 && <ProblemStep c={c} model={model} onDone={() => setStep(1)} />}
-      {step === 1 && <PillsStep c={c} pills={pills} model={model} setStep={setStep} />}
-      {step === 2 && <QuestionsStep c={c} pills={pills} model={model} setStep={setStep} />}
-      {step === 3 && <ConfirmStep c={c} pills={pills} model={model} setStep={setStep} />}
+      {step === 1 && <PlanStep c={c} pills={pills} model={model} setStep={setStep} />}
+      {step === 2 && <ConfirmStep c={c} pills={pills} model={model} setStep={setStep} />}
     </>
   );
 }
@@ -240,88 +239,13 @@ function ProblemStep({ c, model, onDone }: { c: Case; model: CaseModel; onDone: 
           </div>
         </section>
       </div>
-      <FooterNav next={next} nextLabel={c.agent && c.agent.problem === draft.value ? 'Next: pills & simulation' : 'Find pills for this problem'}
+      <FooterNav next={next} nextLabel={c.agent && c.agent.problem === draft.value ? 'Next: pills & questions' : 'Find pills for this problem'}
         nextDisabled={!draft.value.trim()} hint="Describe the problem to continue" busy={busy} />
     </>
   );
 }
 
-// step 2 · the agent searches pills + playbook, the simulation checks, the engineer tweaks (the loop)
-
-function PillsStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model: CaseModel; setStep: (i: number) => void }) {
-  const { act } = useApp();
-  const [busy, setBusy] = useState(false);
-  const agent = c.agent!;
-  const { notes, matches } = model;
-  const level = overallLevel(notes.map((n) => n.level));
-  const library = pills.filter((p) => !p.caseId);
-  const usedPills = matches.filter((m) => m.role === 'measure');
-  const checks = matches.filter((m) => m.role === 'check');
-  const others = matches.filter((m) => m.role === 'related' || m.role === 'none');
-  const fromYou = Object.keys(agent.mentioned).length;
-  const replan = async () => { setBusy(true); await act(c.id, { type: 'replan' }); setBusy(false); };
-
-  return (
-    <>
-      <section className="agent-bar" aria-live="polite">
-        <span className="agent-badge"><Icon name="search" size={14} />Agent</span>
-        <p>
-          Searched <strong>{library.length} pills</strong> in the library and <strong>{MEASURES.length + OUT_OF_SCOPE.length} practices</strong> in the domain playbook.
-          {' '}{fromYou ? <>Found <strong>{fromYou}</strong> measure{fromYou > 1 ? 's' : ''} in your notes</> : <>Found no measure in your notes</>}
-          {agent.added.length ? <>, added <strong>{agent.added.length}</strong></> : null}, and used <strong>{usedPills.length} existing pill{usedPills.length === 1 ? '' : 's'}</strong>.
-        </p>
-        <div className="agent-bar-side">
-          <LevelChip level={level} />
-          <button type="button" className="btn" onClick={replan} disabled={busy}><Icon name="replan" size={16} />{busy ? 'Re-planning…' : 'Re-plan from my selection'}</button>
-        </div>
-      </section>
-
-      {agent.added.length > 0 && (
-        <ul className="added-list">
-          {agent.added.map((a) => (
-            <li key={a.id}><span className="origin origin--agent">Added by agent</span> <strong>{MEASURES.find((m) => m.id === a.id)?.title}.</strong> <Explained text={a.reason} /></li>
-          ))}
-        </ul>
-      )}
-
-      <div className="grid grid--pills">
-        <section className="proposal">
-          <h2>Proposed solution</h2>
-          <p className="muted">Tick or untick to change it. Every change re-runs the simulation.</p>
-          <MeasureList c={c} pills={pills} model={model} />
-
-          {checks.length > 0 && (
-            <div className="checks">
-              <h3>Required before execution</h3>
-              <p className="muted">{checks[0].reason}</p>
-              {checks.map((m) => <CheckPill key={m.pill.id} pill={m.pill} />)}
-            </div>
-          )}
-
-          <Disclosure summary={`Other pills the agent looked at (${others.length})`}>
-            <ul className="others">
-              {others.map((m) => (
-                <li key={m.pill.id}>
-                  <span className="check-pill-id">{m.pill.id}</span> <strong>{m.pill.title}</strong> <Stars value={health(m.pill)} />
-                  <span className={`role role--${m.role}`}>{m.role === 'related' ? 'Related' : 'Not relevant'}</span>
-                  <span className="muted"> {m.reason}</span>
-                </li>
-              ))}
-            </ul>
-          </Disclosure>
-          <Disclosure summary="Ideas that need building works (not part of this pill)">
-            <ul className="others">{OUT_OF_SCOPE.map((o) => <li key={o.title}><strong>{o.title}.</strong> <span className="muted">{o.note}</span></li>)}</ul>
-          </Disclosure>
-        </section>
-        <SimulationPanel c={c} model={model} />
-      </div>
-      <FooterNav back={() => setStep(0)} next={() => setStep(2)} nextLabel="Next: the agent's questions"
-        nextDisabled={c.measures.length === 0} hint="Pick at least one measure" />
-    </>
-  );
-}
-
-/** The live simulation, re-run on every change to the plan. Shared by steps 2 and 3. */
+/** The live simulation, re-run on every change to the plan. */
 function SimulationPanel({ c, model }: { c: Case; model: CaseModel }) {
   const { base, fix, notes } = model;
   const level = overallLevel(notes.map((n) => n.level));
@@ -346,7 +270,7 @@ function SimulationPanel({ c, model }: { c: Case; model: CaseModel }) {
   );
 }
 
-function MeasureList({ c, pills, model, compact = false }: { c: Case; pills: Pill[]; model: CaseModel; compact?: boolean }) {
+function MeasureList({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel }) {
   const { act } = useApp();
   const agent = c.agent;
   const toggle = (id: MeasureId) => {
@@ -354,9 +278,9 @@ function MeasureList({ c, pills, model, compact = false }: { c: Case; pills: Pil
     void act(c.id, { type: 'update', measures: next }, (x) => ({ ...x, measures: next, simRuns: x.simRuns + 1, confirmed: false }));
   };
   return (
-    <ul className={`measures${compact ? ' measures--compact' : ''}`}>
+    <ul className="measures">
       {MEASURES.map((m) => (
-        <MeasureRow key={m.id} m={m} c={c} pills={pills} model={model} compact={compact}
+        <MeasureRow key={m.id} m={m} c={c} pills={pills} model={model}
           origin={agent && m.id in agent.mentioned ? 'you' : agent?.added.some((a) => a.id === m.id) ? 'agent' : null}
           quote={agent?.mentioned[m.id]} onToggle={() => toggle(m.id)} />
       ))}
@@ -364,12 +288,12 @@ function MeasureList({ c, pills, model, compact = false }: { c: Case; pills: Pil
   );
 }
 
-function MeasureRow({ m, c, pills, model, compact, origin, quote, onToggle }: {
-  m: Measure; c: Case; pills: Pill[]; model: CaseModel; compact: boolean;
+function MeasureRow({ m, c, pills, model, origin, quote, onToggle }: {
+  m: Measure; c: Case; pills: Pill[]; model: CaseModel;
   origin: 'you' | 'agent' | null; quote?: string; onToggle: () => void;
 }) {
   const on = c.measures.includes(m.id);
-  const id = `measure-${m.id}${compact ? '-c' : ''}`;
+  const id = `measure-${m.id}`;
   const { base, settings, diagnosis } = model;
   const chart = m.chart(settings);
   return (
@@ -385,17 +309,15 @@ function MeasureRow({ m, c, pills, model, compact, origin, quote, onToggle }: {
       </div>
       <p className="measure-gist">{m.gist(settings)}</p>
       <TunedSettings measure={m.id} tuning={c.tuning} />
-      {!compact && (
-        <Disclosure summary="Why it helps, trade-off and chart">
-          <dl className="measure-detail">
-            <dt>Why it helps here</dt><dd><Explained text={m.why(diagnosis, settings)} /></dd>
-            <dt>Trade-off</dt><dd>{m.tradeoff(settings)}</dd>
-            <dt>Where it comes from</dt><dd>{m.origin} <span className="muted">Inspired by {m.inspiredBy.toLowerCase()}.</span></dd>
-            <dt>What the simulator changes</dt><dd className="mono-data">{m.simChange(settings)}</dd>
-          </dl>
-          <SoloChart m={m} base={base} chart={chart} model={model} />
-        </Disclosure>
-      )}
+      <Disclosure summary="Why it helps, trade-off and chart">
+        <dl className="measure-detail">
+          <dt>Why it helps here</dt><dd><Explained text={m.why(diagnosis, settings)} /></dd>
+          <dt>Trade-off</dt><dd>{m.tradeoff(settings)}</dd>
+          <dt>Where it comes from</dt><dd>{m.origin} <span className="muted">Inspired by {m.inspiredBy.toLowerCase()}.</span></dd>
+          <dt>What the simulator changes</dt><dd className="mono-data">{m.simChange(settings)}</dd>
+        </dl>
+        <SoloChart m={m} base={base} chart={chart} model={model} />
+      </Disclosure>
     </li>
   );
 }
@@ -409,10 +331,21 @@ function SoloChart({ m, base, chart, model }: { m: Measure; base: CaseModel['bas
   );
 }
 
-// step 3 · the agent's questions, plus the engineer's own comments that the agent turns into plan changes
+// step 2 · the agent searches pills + playbook and proposes a plan, the simulation checks it,
+// and the engineer tweaks it by ticking, commenting and answering the agent's questions (the loop)
 
-function QuestionsStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model: CaseModel; setStep: (i: number) => void }) {
+function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model: CaseModel; setStep: (i: number) => void }) {
   const { act } = useApp();
+  const [busy, setBusy] = useState(false);
+  const agent = c.agent!;
+  const { notes, matches } = model;
+  const level = overallLevel(notes.map((n) => n.level));
+  const library = pills.filter((p) => !p.caseId);
+  const usedPills = matches.filter((m) => m.role === 'measure');
+  const checks = matches.filter((m) => m.role === 'check');
+  const others = matches.filter((m) => m.role === 'related' || m.role === 'none');
+  const fromYou = Object.keys(agent.mentioned).length;
+  const replan = async () => { setBusy(true); await act(c.id, { type: 'replan' }); setBusy(false); };
   const draft = useDraft(c.answers, (v) => void act(c.id, { type: 'update', answers: v }, (x) => ({ ...x, answers: v })));
   const qs = model.questions;
   const answered = qs.filter((q) => draft.value[q.id]?.trim()).length;
@@ -430,11 +363,41 @@ function QuestionsStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; m
           <p className="muted">Your comments change the plan, and the simulation re-runs. Your answers go to the manager as the pill's captured know-how.</p>
         </div>
       </div>
+      <section className="agent-bar" aria-live="polite">
+        <span className="agent-badge"><Icon name="search" size={14} />Agent</span>
+        <p>
+          Searched <strong>{library.length} pills</strong> in the library and <strong>{MEASURES.length + OUT_OF_SCOPE.length} practices</strong> in the domain playbook.
+          {' '}{fromYou ? <>Found <strong>{fromYou}</strong> measure{fromYou > 1 ? 's' : ''} in your notes</> : <>Found no measure in your notes</>}
+          {agent.added.length ? <>, added <strong>{agent.added.length}</strong></> : null}, and used <strong>{usedPills.length} existing pill{usedPills.length === 1 ? '' : 's'}</strong>.
+        </p>
+        <div className="agent-bar-side">
+          <LevelChip level={level} />
+          <button type="button" className="btn" onClick={replan} disabled={busy}><Icon name="replan" size={16} />{busy ? 'Re-planning…' : 'Re-plan from my selection'}</button>
+        </div>
+      </section>
+
+      {agent.added.length > 0 && (
+        <ul className="added-list">
+          {agent.added.map((a) => (
+            <li key={a.id}><span className="origin origin--agent">Added by agent</span> <strong>{MEASURES.find((m) => m.id === a.id)?.title}.</strong> <Explained text={a.reason} /></li>
+          ))}
+        </ul>
+      )}
+
       <div className="grid grid--pills">
         <section className="proposal">
           <h2>Proposed solution</h2>
-          <p className="muted">Tick or untick a measure, or tell the agent what to change below.</p>
-          <MeasureList c={c} pills={pills} model={model} compact />
+          <p className="muted">Tick or untick a measure, or tell the agent what to change below. Every change re-runs the simulation.</p>
+          <MeasureList c={c} pills={pills} model={model} />
+
+          {checks.length > 0 && (
+            <div className="checks">
+              <h3>Required before execution</h3>
+              <p className="muted">{checks[0].reason}</p>
+              {checks.map((m) => <CheckPill key={m.pill.id} pill={m.pill} />)}
+            </div>
+          )}
+
           <CommentsSection c={c} />
 
           <div className="questions-block">
@@ -465,10 +428,25 @@ function QuestionsStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; m
               })}
             </div>
           </div>
+
+          <Disclosure summary={`Other pills the agent looked at (${others.length})`}>
+            <ul className="others">
+              {others.map((m) => (
+                <li key={m.pill.id}>
+                  <span className="check-pill-id">{m.pill.id}</span> <strong>{m.pill.title}</strong> <Stars value={health(m.pill)} />
+                  <span className={`role role--${m.role}`}>{m.role === 'related' ? 'Related' : 'Not relevant'}</span>
+                  <span className="muted"> {m.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </Disclosure>
+          <Disclosure summary="Ideas that need building works (not part of this pill)">
+            <ul className="others">{OUT_OF_SCOPE.map((o) => <li key={o.title}><strong>{o.title}.</strong> <span className="muted">{o.note}</span></li>)}</ul>
+          </Disclosure>
         </section>
         <SimulationPanel c={c} model={model} />
       </div>
-      <FooterNav back={() => leave(1)} next={() => leave(3)} nextLabel="Next: confirm & send"
+      <FooterNav back={() => leave(0)} next={() => leave(2)} nextLabel="Next: confirm & send"
         nextDisabled={c.measures.length === 0} hint="Pick at least one measure" />
     </>
   );
@@ -542,7 +520,7 @@ function CommentsSection({ c }: { c: Case }) {
   );
 }
 
-// step 4 · engineer confirms, then issues for approval
+// step 3 · engineer confirms, then issues for approval
 
 function ConfirmStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model: CaseModel; setStep: (i: number) => void }) {
   const { act } = useApp();
@@ -569,7 +547,7 @@ function ConfirmStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; mod
           </label>
         </aside>
       </div>
-      <FooterNav back={() => setStep(2)} next={send} nextLabel={`Issue revision ${c.revision + 1} for approval`} busy={busy}
+      <FooterNav back={() => setStep(1)} next={send} nextLabel={`Issue revision ${c.revision + 1} for approval`} busy={busy}
         nextDisabled={!c.confirmed} hint="Tick the confirmation to send" />
     </>
   );
