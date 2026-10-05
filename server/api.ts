@@ -2,8 +2,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   applyAction, FlowError, newCase, sampleCase, USERS, userById,
-  type Action, type AppState, type Pill,
+  type Action, type AppState, type Pill, type Profile, type User,
 } from '../shared/flow.ts';
+import { caseMails, isEmail, sendMail, type Mail } from './email.ts';
 import { readComment } from './gemini.ts';
 import type { Store } from './store.ts';
 
@@ -31,6 +32,13 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   throw new FlowError('Body must be a JSON object.', 400);
 }
 
+/** The address people use to reach this server, for links in emails. APP_URL overrides it. */
+function baseUrl(req: IncomingMessage) {
+  if (process.env.APP_URL?.trim()) return process.env.APP_URL.trim().replace(/\/$/, '');
+  const proto = String(req.headers['x-forwarded-proto'] ?? 'http').split(',')[0].trim();
+  return `${proto}://${req.headers.host ?? 'localhost'}`;
+}
+
 export function createApi(store: Store) {
   let version = 1;
   const reading = new Set<string>(); // cases with a comment being read right now
@@ -39,8 +47,26 @@ export function createApi(store: Store) {
     version += 1;
     for (const res of listeners) res.write(`data: ${version}\n\n`);
   };
-  const state = (): AppState & { users: typeof USERS } => ({
-    version, users: USERS, cases: store.cases(), pills: store.pills(), audit: store.audit(),
+  // A profile's email starts from MANAGER_EMAIL / ENGINEER_EMAIL, so it survives a host that wipes its disk.
+  const profileOf = (u: User): Profile => {
+    const p = store.profile(u.id);
+    return { email: p.email ?? process.env[`${u.role.toUpperCase()}_EMAIL`]?.trim() ?? '', notify: p.notify ?? true, ...(p.photo && { photo: p.photo }) };
+  };
+  const people = () => USERS.map((u) => ({ ...u, ...profileOf(u) }));
+  const lastTest = new Map<string, number>();
+  /** Send in the background and record each outcome in the audit log, without the address. */
+  const deliver = (mails: Mail[], target: string) => {
+    for (const m of mails) {
+      void sendMail(m).then((r) => {
+        store.log({ at: new Date().toISOString(), actor: 'system', role: 'system', action: 'email', target,
+          detail: r.ok ? `Emailed ${m.toName}: “${m.subject}”.` : `Email to ${m.toName} failed: ${r.error}` });
+        changed();
+      });
+    }
+  };
+  // Every browser gets names and photos; email addresses only go to their owner's profile page.
+  const state = (): AppState & { users: User[] } => ({
+    version, users: people().map(({ email: _e, notify: _n, ...u }) => u), cases: store.cases(), pills: store.pills(), audit: store.audit(),
   });
 
   return async function api(req: IncomingMessage, res: ServerResponse, next: Next) {
@@ -51,6 +77,12 @@ export function createApi(store: Store) {
 
     try {
       if (req.method === 'GET' && path === '/api/state') return send(res, 200, state());
+
+      if (req.method === 'GET' && path === '/api/profile') {
+        const me = userById(String(req.headers['x-demo-user'] ?? ''));
+        if (!me) throw new FlowError('Sign in first.', 401);
+        return send(res, 200, { profile: profileOf(me), emailReady: !!process.env.RESEND_API_KEY?.trim() });
+      }
 
       if (req.method === 'GET' && path === '/api/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -105,13 +137,15 @@ export function createApi(store: Store) {
           target = store.cases().find((c) => c.id === current.id) ?? current; // the plan may have moved while the agent read
         }
         const final = action;
-        store.tx(() => {
+        const saved = store.tx(() => {
           const out = applyAction(target, final, actor, new Date().toISOString(), store.pills());
           store.putCase(out.case);
           if (out.pill) store.putPill(out.pill);
           if (final.type !== 'update') log(final.type, current.id, out.detail);
+          return out.case;
         });
         changed();
+        if (final.type === 'submit' || final.type === 'approve' || final.type === 'return') deliver(caseMails(saved, final.type, people(), baseUrl(req)), saved.id);
         return send(res, 200, { state: state() });
       }
 
@@ -139,6 +173,52 @@ export function createApi(store: Store) {
         store.tx(() => { store.putPill(updated); log('rate', pill.id, `Health set to ${rating} stars: ${reason}`); });
         changed();
         return send(res, 200, { state: state() });
+      }
+
+      if (path === '/api/profile') {
+        const was = profileOf(actor);
+        const next: Profile = { ...was };
+        const changes: string[] = [];
+        if (body.email !== undefined) {
+          const email = typeof body.email === 'string' ? body.email.trim() : '';
+          if (email && !isEmail(email)) throw new FlowError('That email address doesn’t look right.', 400);
+          if (email !== was.email) { next.email = email; changes.push(email ? 'email' : 'removed email'); }
+        }
+        if (body.notify !== undefined) {
+          if (typeof body.notify !== 'boolean') throw new FlowError('notify must be true or false.', 400);
+          if (body.notify !== was.notify) { next.notify = body.notify; changes.push(body.notify ? 'emails on' : 'emails off'); }
+        }
+        if (body.photo !== undefined) {
+          if (body.photo === null) { delete next.photo; changes.push('removed photo'); }
+          else if (typeof body.photo !== 'string' || !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(body.photo) || body.photo.length > 60_000) {
+            throw new FlowError('Use a PNG, JPEG or WebP photo.', 400);
+          } else if (body.photo !== was.photo) { next.photo = body.photo; changes.push('photo'); }
+        }
+        if (changes.length) {
+          store.tx(() => { store.putProfile(actor.id, next); log('profile', actor.id, `Updated profile: ${changes.join(', ')}.`); });
+          changed();
+        }
+        return send(res, 200, { profile: next, state: state() });
+      }
+
+      if (path === '/api/profile/test') {
+        const me = profileOf(actor);
+        if (!me.email) throw new FlowError('Add your email address first.', 400);
+        const wait = 20_000 - (Date.now() - (lastTest.get(actor.id) ?? 0));
+        if (wait > 0) throw new FlowError(`Wait ${Math.ceil(wait / 1000)} seconds before sending another test email.`, 429);
+        lastTest.set(actor.id, Date.now());
+        const r = await sendMail({
+          to: me.email, toName: actor.name, subject: 'Test email from Intelligence Pills',
+          heading: `Hello ${actor.name.split(' ')[0]}, your notifications work`,
+          lines: [actor.role === 'manager'
+            ? 'You will get an email here whenever an engineer issues a pill for your approval.'
+            : 'You will get an email here whenever the manager approves or returns one of your pills.'],
+          link: { href: `${baseUrl(req)}/profile?as=${actor.id}`, label: 'Open your profile' },
+        });
+        log('email', actor.id, r.ok ? `Sent ${actor.name} a test email.` : `Test email to ${actor.name} failed: ${r.error}`);
+        changed();
+        if (!r.ok) throw new FlowError(`The email didn't send: ${r.error}`, 502);
+        return send(res, 200, { sent: true, state: state() });
       }
 
       if (path === '/api/reset') {

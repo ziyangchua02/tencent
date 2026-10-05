@@ -8,7 +8,9 @@ import {
 import { applyReading, defaultReply, samePlan, type CommentEntry, type Reading } from './comments.ts';
 
 export type Role = 'engineer' | 'manager';
-export interface User { id: string; name: string; role: Role; title: string; scope: string }
+export interface User { id: string; name: string; role: Role; title: string; scope: string; photo?: string }
+/** What each person sets on their profile page. The email address stays on the server. */
+export interface Profile { email: string; notify: boolean; photo?: string }
 
 export const USERS: User[] = [
   { id: 'wei_ming', name: 'Wei Ming Tan', role: 'engineer', title: 'Senior M&E Engineer', scope: 'Tower A' },

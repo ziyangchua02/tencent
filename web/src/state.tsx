@@ -140,7 +140,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(() => ({
-    state, sync, pending, user: userById(userId) ?? null, signIn, error, dismissError: () => setError(null), post, act,
+    // The server's copy carries the profile photo; the built-in list covers the moment before it loads.
+    state, sync, pending, user: state?.users.find((u) => u.id === userId) ?? userById(userId) ?? null, signIn, error, dismissError: () => setError(null), post, act,
   }), [state, sync, pending, userId, signIn, error, post, act]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

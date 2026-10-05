@@ -5,11 +5,11 @@ import { SingleLine } from './drawings.tsx';
 import { CasePage, CasesPage, NotFound } from './engineer.tsx';
 import { AuditPage, LibraryPage, PillPage } from './library.tsx';
 import { QueuePage, ReviewPage } from './manager.tsx';
+import { ProfilePage } from './profile.tsx';
 import { AppProvider, go, Link, useApp, useLocation } from './state.tsx';
-import { BrandMark, Icon } from './ui.tsx';
+import { Avatar, BrandMark, Icon } from './ui.tsx';
 
 const home = (u: User) => (u.role === 'engineer' ? '/cases' : '/review');
-const initials = (name: string) => name.split(' ').map((w) => w[0]).slice(0, 2).join('');
 
 export default function App() {
   return (
@@ -29,7 +29,7 @@ function Routes() {
   const { user, state } = useApp();
   const [, section, id] = path.split('/');
   useEffect(() => {
-    const names: Record<string, string> = { cases: 'My cases', review: 'Review queue', pills: 'Pill library', audit: 'Audit log' };
+    const names: Record<string, string> = { cases: 'My cases', review: 'Review queue', pills: 'Pill library', audit: 'Audit log', profile: 'Profile' };
     document.title = [id, names[section], 'Intelligence Pills'].filter(Boolean).join(' · ');
   }, [section, id]);
 
@@ -45,6 +45,7 @@ function Routes() {
   else if (section === 'review') page = id ? <ReviewPage id={id} /> : <QueuePage />;
   else if (section === 'pills') page = id ? <PillPage id={id} /> : <LibraryPage />;
   else if (section === 'audit') page = <AuditPage />;
+  else if (section === 'profile') page = <ProfilePage />;
   else page = <NotFound what="That page" back={home(user)} />;
   return <Shell user={user}>{page}</Shell>;
 }
@@ -106,13 +107,15 @@ function Shell({ user, children }: { user: User; children: ReactNode }) {
 function PersonaMenu({ user }: { user: User }) {
   const { signIn, post } = useApp();
   const [confirm, setConfirm] = useState(false);
+  const close = (e: React.MouseEvent) => (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
   return (
     <details className="persona" onToggle={(e) => { if (!(e.target as HTMLDetailsElement).open) setConfirm(false); }}>
       <summary aria-label={`Signed in as ${user.name}, ${user.title}. Open menu`}>
-        <span className="avatar" aria-hidden="true">{initials(user.name)}</span>
+        <Avatar user={user} />
         <span className="persona-text"><strong>{user.name}</strong><span>{user.title}</span></span>
       </summary>
       <div className="persona-menu">
+        <button type="button" onClick={(e) => { close(e); go('/profile'); }}><Icon name="mail" size={16} />Profile and notifications</button>
         <button type="button" onClick={() => { signIn(null); go('/'); }}><Icon name="user" size={16} />Switch role</button>
         {confirm ? (
           <div className="reset-confirm">
@@ -139,7 +142,7 @@ const ROLE_COPY: Record<User['role'], { does: string; cta: string }> = {
 const FLOW = ['Define the problem', 'Agent finds pills', 'Simulate and tweak', 'Agent asks questions', 'Engineer confirms', 'Manager approves or returns', 'Execute and rate'];
 
 function Login() {
-  const { signIn } = useApp();
+  const { signIn, state } = useApp();
   const { path } = useLocation();
   const base = baseline();
   const enter = (u: User) => {
@@ -178,7 +181,7 @@ function Login() {
           {USERS.map((u) => (
             <article key={u.id} className={`role-card role-card--${u.role}`}>
               <div className="role-who">
-                <span className="avatar avatar--lg" aria-hidden="true">{initials(u.name)}</span>
+                <Avatar user={state?.users.find((x) => x.id === u.id) ?? u} size="lg" />
                 <div>
                   <strong>{u.name}</strong>
                   <span>{u.title}</span>

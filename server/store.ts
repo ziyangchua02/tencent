@@ -3,7 +3,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { seedPills, type AuditEvent, type Case, type Pill } from '../shared/flow.ts';
+import { seedPills, type AuditEvent, type Case, type Pill, type Profile } from '../shared/flow.ts';
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -31,6 +31,12 @@ export function openStore(path: string) {
       db.prepare('select * from audit order by seq desc limit ?').all(limit) as unknown as AuditEvent[],
     putCase: (c: Case) => put('case', c.id, c),
     putPill: (p: Pill) => put('pill', p.id, p),
+    /** Profiles survive a demo reset: they are people's settings, not demo data. */
+    profile: (id: string) => {
+      const row = db.prepare("select json from docs where kind = 'profile' and id = ?").get(id) as { json: string } | undefined;
+      return row ? (JSON.parse(row.json) as Partial<Profile>) : {};
+    },
+    putProfile: (id: string, p: Profile) => put('profile', id, p),
     log: (e: Omit<AuditEvent, 'seq'>) =>
       db.prepare('insert into audit (at, actor, role, action, target, detail) values (?, ?, ?, ?, ?, ?)')
         .run(e.at, e.actor, e.role, e.action, e.target, e.detail),

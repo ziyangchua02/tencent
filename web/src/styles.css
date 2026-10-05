@@ -136,6 +136,8 @@ code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size:
 .persona-text span { font-size: 0.78rem; color: var(--shell-ink-2); }
 .avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--shell-ink); color: var(--shell); font-family: var(--cond); font-weight: 700; font-size: 0.82rem; flex: none; }
 .avatar--lg { width: 44px; height: 44px; font-size: 1rem; background: var(--shell); color: var(--shell-ink); }
+.avatar--xl { width: 96px; height: 96px; font-size: 2rem; background: var(--shell); color: var(--shell-ink); }
+.avatar--photo { object-fit: cover; background: var(--rule); }
 .persona-menu {
   position: absolute; right: 0; top: calc(100% + 6px); min-width: 260px; z-index: 30;
   background: var(--sheet); color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 2px;
@@ -739,3 +741,15 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .sheet-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
 .sheet-comments li { display: grid; gap: 4px; font-size: 0.92rem; }
 .sheet-comments .label { margin-right: var(--s2); }
+
+/* ---------- profile ---------- */
+
+.profile-card { max-width: 640px; background: var(--sheet); border: 1px solid var(--rule); padding: var(--s5); }
+.profile-who { display: flex; gap: var(--s5); align-items: flex-start; flex-wrap: wrap; }
+.profile-who h2 { margin: 0; }
+.profile-photo-actions { display: flex; gap: var(--s3); align-items: center; margin-top: var(--s3); flex-wrap: wrap; }
+.profile-card input[type='email'] { padding: 8px 10px; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--sheet); max-width: 420px; }
+.profile-card input[type='email']:focus { outline: none; border-color: var(--proposed); box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.18); }
+.profile-check { display: flex; gap: var(--s3); align-items: flex-start; margin-top: var(--s4); cursor: pointer; }
+.profile-check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--shell); flex: none; }
+.profile-actions { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--rule); }

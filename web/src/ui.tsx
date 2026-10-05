@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import type { CaseStatus } from '../../shared/flow.ts';
+import type { CaseStatus, User } from '../../shared/flow.ts';
 import { TERMS, type NoteLevel, type Verdict } from '../../shared/model.ts';
 
 // ---------- icons: one stroke family, drawn here ----------
@@ -18,6 +18,7 @@ const PATHS = {
   replan: 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5',
   doc: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0',
+  mail: 'M3.5 6h17v12h-17zM4 6.5l8 6.5 8-6.5',
   bolt: 'M13 3L5 13.5h6L10 21l8-10.5h-6z',
   tool: 'M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17v3h3l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.4 2.4-2.4-.6-.6-2.4z',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20.5 20.5L16 16',
@@ -31,6 +32,14 @@ export function Icon({ name, size = 18, className }: { name: IconName; size?: nu
       <path d={PATHS[name]} fill={name === 'play' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+/** A person's photo, or their initials when they haven't set one. */
+export function Avatar({ user, size }: { user: Pick<User, 'name' | 'photo'>; size?: 'lg' | 'xl' }) {
+  const cls = `avatar${size ? ` avatar--${size}` : ''}`;
+  return user.photo
+    ? <img className={`${cls} avatar--photo`} src={user.photo} alt="" />
+    : <span className={cls} aria-hidden="true">{user.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>;
 }
 
 export function BrandMark({ size = 28 }: { size?: number }) {
