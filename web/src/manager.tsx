@@ -157,7 +157,7 @@ function Glance({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel 
         <section className="proposal">
           <h2>Proposed by engineering</h2>
           <ul className="measure-list">
-            {MEASURES.filter((m) => c.measures.includes(m.id)).map((m) => <li key={m.id}><strong>{m.title}</strong><SourceTag id={m.id} pills={pills} /><TunedSettings measure={m.id} tuning={c.tuning} /></li>)}
+            {MEASURES.filter((m) => c.measures.includes(m.id)).map((m) => <li key={m.id}><strong>{m.title}</strong>{c.own.includes(m.id) && <span className="origin origin--own">Added by the engineer</span>}<SourceTag id={m.id} pills={pills} /><TunedSettings measure={m.id} tuning={c.tuning} /></li>)}
           </ul>
           <blockquote className="quote">{c.problem}</blockquote>
           {skipped > 0 && <p className="callout callout--warn"><Icon name="alert" size={16} />The engineer skipped {skipped} of {model.questions.length} reviewer questions.</p>}

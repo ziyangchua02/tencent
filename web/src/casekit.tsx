@@ -153,7 +153,7 @@ export function PillDrawing({ c, model, pills }: { c: Case; model: CaseModel; pi
           <h4>Measures</h4>
           {chosen.length ? (
             <ul className="measure-list">
-              {chosen.map((m) => <li key={m.id}><strong>{m.title}</strong><SourceTag id={m.id} pills={pills} /><TunedSettings measure={m.id} tuning={c.tuning} /></li>)}
+              {chosen.map((m) => <li key={m.id}><strong>{m.title}</strong>{c.own.includes(m.id) && <span className="origin origin--own">Added by the engineer</span>}<SourceTag id={m.id} pills={pills} /><TunedSettings measure={m.id} tuning={c.tuning} /></li>)}
             </ul>
           ) : <p className="muted">No measures selected yet.</p>}
         </section>

@@ -25,7 +25,7 @@ export function openStore(path: string) {
 
   const store = {
     // Older rows predate comments and tuning; fill the defaults so every reader sees one shape.
-    cases: () => all<Case>('case').map((c) => ({ ...c, tuning: c.tuning ?? {}, comments: c.comments ?? [] })),
+    cases: () => all<Case>('case').map((c) => ({ ...c, tuning: c.tuning ?? {}, own: c.own ?? [], comments: c.comments ?? [] })),
     pills: () => all<Pill>('pill'),
     audit: (limit = 300) =>
       db.prepare('select * from audit order by seq desc limit ?').all(limit) as unknown as AuditEvent[],

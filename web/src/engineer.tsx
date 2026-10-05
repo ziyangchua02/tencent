@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { samePlan } from '../../shared/comments.ts';
 import { health, isEscalated, USERS, type Case, type Pill } from '../../shared/flow.ts';
 import {
-  baseline, BOARD_NAMES, fmtKw, fmtTime, MEASURES, OUT_OF_SCOPE, PERSPECTIVES, SAMPLE_ANSWERS, simulateMeasures, TOWER,
+  baseline, BOARD_NAMES, fmtKw, fmtTime, MEASURES, OUT_OF_SCOPE, PERSPECTIVES, SAMPLE_ANSWERS, SAMPLE_COMMENT, simulateMeasures, TOWER,
   type Measure, type MeasureId,
 } from '../../shared/model.ts';
 import {
@@ -249,14 +249,15 @@ function ProblemStep({ c, model, onDone }: { c: Case; model: CaseModel; onDone: 
 function SimulationPanel({ c, model }: { c: Case; model: CaseModel }) {
   const { base, fix, notes } = model;
   const level = overallLevel(notes.map((n) => n.level));
+  const mine = c.measures.some((m) => c.own.includes(m)) ? simulateMeasures(c.measures.filter((m) => !c.own.includes(m)), model.settings) : undefined;
   return (
     <section className="viewport simulation">
       <header className="viewport-head">
         <h2 className="view-title">Simulation · run {c.simRuns}</h2>
         <LevelChip level={level} />
       </header>
-      <SingleLine today={base} proposal={c.measures.length ? fix : undefined} revision={c.revision + 1} />
-      <BuildingChart today={base} pill={c.measures.length ? fix : undefined} pillLabel="Proposal" height={200} />
+      <SingleLine today={base} proposal={c.measures.length ? fix : undefined} mine={mine} revision={c.revision + 1} />
+      <BuildingChart today={base} pill={c.measures.length ? fix : undefined} pillLabel="Proposal" mine={mine} height={200} title={TOWER.name} />
       <div className="viewport-section">
         <h3 className="sub-title">Agent check</h3>
         <ul className="notes" aria-live="polite">{notes.map((n, i) => <NoteLine key={i} level={n.level}><Explained text={n.text} /></NoteLine>)}</ul>
@@ -279,25 +280,27 @@ function MeasureList({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseM
   };
   return (
     <ul className="measures">
-      {MEASURES.map((m) => (
-        <MeasureRow key={m.id} m={m} c={c} pills={pills} model={model}
-          origin={agent && m.id in agent.mentioned ? 'you' : agent?.added.some((a) => a.id === m.id) ? 'agent' : null}
-          quote={agent?.mentioned[m.id]} onToggle={() => toggle(m.id)} />
-      ))}
+      {MEASURES.map((m) => {
+        const origin = c.own.includes(m.id) ? 'own' : agent && m.id in agent.mentioned ? 'you' : agent?.added.some((a) => a.id === m.id) ? 'agent' : null;
+        // Only what someone proposed is listed; a measure first named in a comment appears once the agent reads it.
+        if (!origin && !c.measures.includes(m.id)) return null;
+        const quote = origin === 'own' ? c.comments.find((e) => e.proposed?.includes(m.id))?.text : agent?.mentioned[m.id];
+        return <MeasureRow key={m.id} m={m} c={c} pills={pills} model={model} origin={origin} quote={quote} onToggle={() => toggle(m.id)} />;
+      })}
     </ul>
   );
 }
 
 function MeasureRow({ m, c, pills, model, origin, quote, onToggle }: {
   m: Measure; c: Case; pills: Pill[]; model: CaseModel;
-  origin: 'you' | 'agent' | null; quote?: string; onToggle: () => void;
+  origin: 'you' | 'agent' | 'own' | null; quote?: string; onToggle: () => void;
 }) {
   const on = c.measures.includes(m.id);
   const id = `measure-${m.id}`;
   const { base, settings, diagnosis } = model;
   const chart = m.chart(settings);
   return (
-    <li className={`measure${on ? ' measure--on' : ''}`}>
+    <li className={`measure${on ? ' measure--on' : ''}${origin === 'own' ? ' measure--own' : ''}`}>
       <div className="measure-main">
         <input id={id} type="checkbox" checked={on} onChange={onToggle} />
         <label htmlFor={id}>{m.title}</label>
@@ -305,6 +308,7 @@ function MeasureRow({ m, c, pills, model, origin, quote, onToggle }: {
       <div className="measure-meta">
         {origin === 'you' && <span className="origin origin--you" title={quote ? `You wrote “${quote}”` : undefined}>From your notes{quote ? `: “${quote}”` : ''}</span>}
         {origin === 'agent' && <span className="origin origin--agent">Added by agent</span>}
+        {origin === 'own' && <span className="origin origin--own" title={quote ? `From your comment “${quote}”` : undefined}>Added by me</span>}
         <SourceTag id={m.id} pills={pills} />
       </div>
       <p className="measure-gist">{m.gist(settings)}</p>
@@ -457,6 +461,7 @@ function CommentsSection({ c }: { c: Case }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const latest = c.comments.at(-1);
+  const useExample = () => setText(SAMPLE_COMMENT);
   const canUndo = !!latest && samePlan({ measures: c.measures, tuning: c.tuning }, latest.after);
   const send = async () => {
     const t = text.trim();
@@ -471,7 +476,11 @@ function CommentsSection({ c }: { c: Case }) {
       <h3 id="comments-title">From your comments</h3>
       <p className="muted">Tell the agent what you'd do differently, in your own words. It changes the plan and the simulation re-runs.</p>
       <div className="field">
-        <label htmlFor="comment" className="sr-only">Comment for the agent</label>
+        <div className="field-label-row">
+          <label htmlFor="comment" className="sr-only">Comment for the agent</label>
+          <span />
+          {!text && <button type="button" className="link-btn" onClick={useExample}>Use the example comment</button>}
+        </div>
         <textarea id="comment" rows={3} value={text} disabled={busy} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); } }}
           placeholder="For example: On hot days start pre-cooling at 5:30, and only run 3 EV chargers from 10 to 4." />

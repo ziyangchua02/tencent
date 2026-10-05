@@ -213,6 +213,8 @@ export interface Case {
   measures: MeasureId[];
   /** Settings the engineer changed through comments, on top of the pill defaults. */
   tuning: Tuning;
+  /** Measures the engineer proposed through a comment ("Added by me"). */
+  own: MeasureId[];
   comments: CommentEntry[];
   simRuns: number;
   answers: Record<string, string>;
@@ -228,7 +230,7 @@ export interface Case {
 export function newCase(id: string, engineerId: string, now: string): Case {
   return {
     id, title: `${TOWER.name} morning demand spike`, asset: TOWER.name, engineerId, createdAt: now, updatedAt: now,
-    status: 'drafting', problem: SAMPLE_PROBLEM, agent: null, measures: [], tuning: {}, comments: [], simRuns: 0, answers: {}, confirmed: false,
+    status: 'drafting', problem: SAMPLE_PROBLEM, agent: null, measures: [], tuning: {}, own: [], comments: [], simRuns: 0, answers: {}, confirmed: false,
     revision: 0, issues: [], evidence: null, decisions: [], pillId: null, liveAt: null,
   };
 }
@@ -351,16 +353,25 @@ export function applyAction(c: Case, action: Action, actor: User, now: string, p
       if (!action.reading) throw new FlowError('The agent has not read this comment yet.', 400);
       const before = { measures: c.measures, tuning: c.tuning };
       const out = applyReading(before, action.reading);
+      // A measure nobody had proposed joins the list unticked, tagged "Added by me", so the engineer ticks it to see its effect.
+      const listed = new Set<string>([...c.measures, ...c.own, ...Object.keys(c.agent?.mentioned ?? {}), ...(c.agent?.added ?? []).map((a) => a.id)]);
+      const proposed = out.plan.measures.filter((m) => !listed.has(m));
+      const after = { measures: out.plan.measures.filter((m) => !proposed.includes(m)), tuning: out.plan.tuning };
+      const applied = out.applied.map((a) => (a.measure && proposed.includes(a.measure) ? { ...a, from: 'Not proposed', to: 'Added by me, tick to include' } : a));
+      const titles = proposed.map((m) => `“${measureById(m)!.title}”`).join(' and ');
       const entry: CommentEntry = {
         id: `C${c.comments.length + 1}-${now.slice(11, 19).replace(/:/g, '')}`,
         at: now, text, reader: action.reading.reader, fallbackReason: action.reading.fallbackReason,
-        reply: action.reading.reply || defaultReply(out.applied, action.reading.notes, out.ignored),
-        applied: out.applied, notes: action.reading.notes, ignored: out.ignored, before, after: out.plan,
+        reply: proposed.length
+          ? `I added ${titles} to the proposed solution with your settings. Tick it to see what it does to the load.`
+          : action.reading.reply || defaultReply(applied, action.reading.notes, out.ignored),
+        applied, ...(proposed.length && { proposed }), notes: action.reading.notes, ignored: out.ignored, before, after,
       };
-      next.measures = out.plan.measures;
-      next.tuning = out.plan.tuning;
+      next.measures = after.measures;
+      next.tuning = after.tuning;
+      next.own = [...c.own, ...proposed];
       next.comments = [...c.comments, entry];
-      if (out.applied.length) { next.simRuns = c.simRuns + 1; next.confirmed = false; }
+      if (applied.length) { next.simRuns = c.simRuns + 1; next.confirmed = false; }
       const by = action.reading.reader === 'gemini' ? 'Gemini' : 'the offline rules';
       return { case: next, detail: `Agent (${by}) read a comment: ${out.applied.length ? out.applied.map((a) => `${a.label} ${a.from} → ${a.to}`).join('; ') : 'no change'}${entry.notes.length ? `; kept ${entry.notes.length} note(s)` : ''}.` };
     }
@@ -373,6 +384,7 @@ export function applyAction(c: Case, action: Action, actor: User, now: string, p
       }
       next.measures = last.before.measures;
       next.tuning = last.before.tuning;
+      next.own = c.own.filter((m) => !last.proposed?.includes(m));
       next.comments = c.comments.slice(0, -1);
       next.simRuns = c.simRuns + 1;
       next.confirmed = false;

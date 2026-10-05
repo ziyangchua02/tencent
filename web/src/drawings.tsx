@@ -47,7 +47,8 @@ const SUBS: { key: Board | 'base'; name: string; role: string }[] = [
   { key: 'base', name: 'Base load', role: 'IT, common areas' },
 ];
 
-export function SingleLine({ today, proposal, revision, caption }: { today: SimResult; proposal?: SimResult; revision?: number; caption?: string }) {
+/** `mine` is the proposal without the engineer's own measures; boards those measures move get a violet cloud. */
+export function SingleLine({ today, proposal, mine, revision, caption }: { today: SimResult; proposal?: SimResult; mine?: SimResult; revision?: number; caption?: string }) {
   const [ref, measured] = useWidth<HTMLDivElement>(860);
   const W = Math.max(720, measured);
   const H = BOX_Y + BOX_H + 10;
@@ -62,7 +63,9 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
   const shown = proposal ?? today;
   // Red markup on any board at or above 90% in what's shown, proposal or not; it outranks the blue revision cloud.
   const marked = (b: Board) => shown.maxBoardPct[b] >= 90;
-  const revised = (b: Board) => changed(b) && !marked(b);
+  const own = (b: Board) => !!proposal && !!mine && Math.abs(proposal.maxBoardPct[b] - mine.maxBoardPct[b]) >= 2 && !marked(b);
+  const revised = (b: Board) => changed(b) && !marked(b) && !own(b);
+  const boxClass = (b: Board) => `sld-box${own(b) ? ' sld-box--own' : revised(b) ? ' sld-box--changed' : ''}`;
   const label = `Single-line diagram of ${TOWER.name}. ` + (Object.keys(r) as Board[]).map((b) =>
     `${BOARD_NAMES[b]}: peak ${Math.round(today.maxBoardPct[b])}% of rating today` +
     (proposal ? `, ${Math.round(proposal.maxBoardPct[b])}% with the proposal` : '') + ` (${STATUS_WORD[boardStatus(shown.maxBoardPct[b])]}).`).join(' ');
@@ -99,13 +102,13 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
           <text x={W / 2 + 20} y={36} className="sld-small sld-muted">Contracted capacity {kwNum(TOWER.contractedCapacityKw)} kW</text>
           <line x1={W / 2} x2={W / 2} y1={41} y2={msb.y} className="sld-wire" />
           {/* MSB */}
-          <rect x={msb.x} y={msb.y} width={msb.w} height={msb.h} className={`sld-box${revised('msb') ? ' sld-box--changed' : ''}`} />
+          <rect x={msb.x} y={msb.y} width={msb.w} height={msb.h} className={boxClass('msb')} />
           <text x={msb.x + 12} y={msb.y + 21} className="sld-title">MSB · Main switchboard</text>
           <text x={msb.x + msb.w - 12} y={msb.y + 21} textAnchor="end" className="sld-pct">{pctText('msb')}</text>
           <text x={msb.x + 12} y={msb.y + 38} className="sld-small sld-muted">Rating {kwNum(r.msb)} kW</text>
           <text x={msb.x + msb.w - 12} y={msb.y + 38} textAnchor="end" className={`sld-status status-${status('msb')}`}>{STATUS_WORD[status('msb')]}</text>
           {bars('msb', msb.x + 12, msb.y + 48, msb.w - 24)}
-          {revised('msb') && <Revision x={msb.x} y={msb.y} w={msb.w} h={msb.h} rev={revision} />}
+          {(revised('msb') || own('msb')) && <Revision x={msb.x} y={msb.y} w={msb.w} h={msb.h} rev={revision} own={own('msb')} />}
           {marked('msb') && <Markup x={msb.x} y={msb.y} w={msb.w} h={msb.h} />}
           {/* busbar */}
           <line x1={W / 2} x2={W / 2} y1={msb.y + msb.h} y2={152} className="sld-wire" />
@@ -118,7 +121,7 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
               <g key={sub.key}>
                 <line x1={cx} x2={cx} y1={152} y2={BOX_Y} className="sld-wire" />
                 {b && <rect x={cx - 6} y={160} width={12} height={12} className="sld-breaker" />}
-                <rect x={x} y={BOX_Y} width={bw} height={BOX_H} className={`sld-box${b && revised(b) ? ' sld-box--changed' : ''}`} />
+                <rect x={x} y={BOX_Y} width={bw} height={BOX_H} className={b ? boxClass(b) : 'sld-box'} />
                 <text x={x + 10} y={BOX_Y + 20} className="sld-title">{sub.name}</text>
                 <text x={x + 10} y={BOX_Y + 37} className="sld-small">{sub.role}</text>
                 <text x={x + 10} y={BOX_Y + 53} className="sld-small sld-muted">{b ? `Rating ${kwNum(r[b])} kW` : `${kwNum(LOADS.baseKw)} kW constant`}</text>
@@ -127,7 +130,7 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
                     {bars(b, x + 10, BOX_Y + 64, bw - 20)}
                     <text x={x + 10} y={BOX_Y + 106} className="sld-pct">{pctText(b)}</text>
                     <text x={x + 10} y={BOX_Y + 122} className={`sld-status status-${status(b)}`}>{STATUS_WORD[status(b)]}</text>
-                    {revised(b) && <Revision x={x} y={BOX_Y} w={bw} h={BOX_H} rev={revision} />}
+                    {(revised(b) || own(b)) && <Revision x={x} y={BOX_Y} w={bw} h={BOX_H} rev={revision} own={own(b)} />}
                     {marked(b) && <Markup x={x} y={BOX_Y} w={bw} h={BOX_H} />}
                   </>
                 ) : (
@@ -148,6 +151,9 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
         {(Object.keys(r) as Board[]).some(revised) && (
           <span className="key"><span className="key-cloud key-cloud--rev" />Changed by this revision</span>
         )}
+        {(Object.keys(r) as Board[]).some(own) && (
+          <span className="key"><span className="key-cloud key-cloud--own" />Changed by your own measure</span>
+        )}
         {(Object.keys(r) as Board[]).some(marked) && (
           <span className="key"><span className="key-cloud key-cloud--markup" />Marked up: above 90% of rating</span>
         )}
@@ -158,10 +164,10 @@ export function SingleLine({ today, proposal, revision, caption }: { today: SimR
   );
 }
 
-function Revision({ x, y, w, h, rev }: { x: number; y: number; w: number; h: number; rev?: number }) {
+function Revision({ x, y, w, h, rev, own = false }: { x: number; y: number; w: number; h: number; rev?: number; own?: boolean }) {
   const pad = 7;
   return (
-    <g className="cloud cloud--rev">
+    <g className={`cloud ${own ? 'cloud--own' : 'cloud--rev'}`}>
       <path d={cloudPath(x - pad, y - pad, w + pad * 2, h + pad * 2)} pathLength={100} />
       {rev !== undefined && (
         <g transform={`translate(${x + w + pad - 4} ${y - pad - 4})`}>
@@ -199,6 +205,8 @@ export interface LoadChartProps {
   today: number[];
   pill?: number[];
   pillLabel?: string;
+  /** The proposal without the engineer's own measures; the gap to `pill` is filled violet. */
+  mine?: number[];
   limit?: { value: number; label: string };
   band?: { from: number; to: number; label: string };
   width?: number;
@@ -206,7 +214,7 @@ export interface LoadChartProps {
   cursor?: number;
 }
 
-export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', limit, band, width: initial = 720, height = 220, cursor }: LoadChartProps) {
+export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', mine, limit, band, width: initial = 720, height = 220, cursor }: LoadChartProps) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, measured] = useWidth<HTMLDivElement>(initial);
   const width = Math.max(300, measured);
@@ -227,6 +235,10 @@ export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', l
   for (let t = Math.ceil(t0 / every) * every; t <= t1 + 1e-9; t += every) ticks.push(t);
   const ti = peakIndex(today);
   const pi = pill ? peakIndex(pill) : -1;
+  const diff = pill && mine ? pill.map((v, i) => v - mine[i]) : [];
+  const di = diff.reduce((best, v, i) => (Math.abs(v) > Math.abs(diff[best]) ? i : best), 0);
+  const showMine = !!pill && !!mine && Math.abs(diff[di]) >= 1;
+  const gap = () => `${line(mine!)} ${pill!.map((v, i) => `L${X(hours[i]).toFixed(1)} ${Y(v).toFixed(1)}`).reverse().join(' ')} Z`;
   const desc = `${title}. Today peaks at ${kwNum(today[ti])} kW at ${fmtTime(hours[ti])}` +
     (pill ? `; ${pillLabel.toLowerCase()} peaks at ${kwNum(pill[pi])} kW at ${fmtTime(hours[pi])}` : '') + (limit ? `. ${limit.label}.` : '.');
 
@@ -252,6 +264,7 @@ export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', l
         <span className="chart-legend">
           <span className="key"><span className="key-line key-line--today" />Today · peak {kwNum(today[ti])} kW</span>
           {pill && <span className="key"><span className="key-line key-line--pill" />{pillLabel} · peak {kwNum(pill[pi])} kW</span>}
+          {showMine && <span className="key"><span className="key-swatch key-swatch--own" />Your change · {diff[di] < 0 ? '−' : '+'}{kwNum(Math.abs(diff[di]))} kW at {fmtTime(hours[di])}</span>}
         </span>
       </figcaption>
       <div ref={ref}>
@@ -279,6 +292,7 @@ export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', l
         <path d={area(today)} className="chart-area chart-area--today" />
         <path d={line(today)} className="chart-line chart-line--today" />
         {pill && <path d={area(pill)} className="chart-area chart-area--pill" />}
+        {showMine && <path d={gap()} className="chart-area chart-area--own" />}
         {pill && <path d={line(pill)} className="chart-line chart-line--pill" />}
         {cursor !== undefined && <line x1={X(cursor)} x2={X(cursor)} y1={M.t} y2={M.t + ih} className="chart-cursor" />}
         {pill && hover === null && (
@@ -309,8 +323,8 @@ export function LoadChart({ title, hours, today, pill, pillLabel = 'Proposal', l
 }
 
 /** Whole-building chart between two hours, for a result against today. */
-export function BuildingChart({ today, pill, pillLabel, from = 5, to = 20, height = 220, cursor, title }: {
-  today: SimResult; pill?: SimResult; pillLabel?: string; from?: number; to?: number; height?: number; cursor?: number; title?: string;
+export function BuildingChart({ today, pill, pillLabel, mine, from = 5, to = 20, height = 220, cursor, title }: {
+  today: SimResult; pill?: SimResult; pillLabel?: string; mine?: SimResult; from?: number; to?: number; height?: number; cursor?: number; title?: string;
 }) {
   const idx = today.series.flatMap((s, i) => (s.t >= from && s.t <= to ? [i] : []));
   return (
@@ -320,6 +334,7 @@ export function BuildingChart({ today, pill, pillLabel, from = 5, to = 20, heigh
       today={idx.map((i) => today.series[i].msb)}
       pill={pill && idx.map((i) => pill.series[i].msb)}
       pillLabel={pillLabel}
+      mine={mine && idx.map((i) => mine.series[i].msb)}
       limit={{ value: TOWER.contractedCapacityKw, label: `Contracted capacity ${fmtKw(TOWER.contractedCapacityKw)}` }}
       band={ARRIVAL_BAND}
       height={height}

@@ -9,7 +9,8 @@ export const TOWER = {
   name: 'Tower A',
   floors: 20,
   contractedCapacityKw: 3000,
-  boardRatings: { msb: 3300, sb1: 1300, sb2: 900, sb3: 900, sb4: 500 },
+  // SB-1 is sized so the agent's plan still leaves it above 90%, and the engineer's own setpoint raise clears it (demo).
+  boardRatings: { msb: 3300, sb1: 820, sb2: 900, sb3: 900, sb4: 500 },
 };
 export type Board = keyof typeof TOWER.boardRatings;
 export const BOARDS = Object.keys(TOWER.boardRatings) as Board[];
@@ -582,18 +583,23 @@ export interface Recommendation {
   clear: boolean;
 }
 
+/** The agent never raises a setpoint on its own: tenants feel it, so an engineer has to propose it. */
+const ENGINEER_ONLY: MeasureId[] = ['setpoint'];
+
 /** Keep everything the engineer chose, then add the fewest measures that clear the most checks. */
 export function recommend(fromUser: readonly MeasureId[], s: Settings = PILL_SETTINGS): Recommendation {
   const base = baseline();
-  const rest = MEASURE_IDS.filter((m) => !fromUser.includes(m));
+  const rest = MEASURE_IDS.filter((m) => !fromUser.includes(m) && !ENGINEER_ONLY.includes(m));
   const best = Array.from({ length: 1 << rest.length }, (_, bits) => rest.filter((_, i) => bits & (1 << i)))
     .map((extra) => {
       const measures = MEASURE_IDS.filter((m) => fromUser.includes(m) || extra.includes(m));
       const result = simulateMeasures(measures, s);
-      return { extra, measures, result, problems: checkSelection(measures, result, base, s).filter(isProblem).length };
+      const notes = checkSelection(measures, result, base, s);
+      return { extra, measures, result, blocks: notes.filter((n) => n.level === 'block').length, problems: notes.filter(isProblem).length };
     })
     .filter((c) => c.measures.length > 0)
-    .sort((a, b) => a.problems - b.problems || a.extra.length - b.extra.length || a.result.peakKw - b.result.peakKw)[0];
+    // A board over its rating outranks any number of warnings.
+    .sort((a, b) => a.blocks - b.blocks || a.problems - b.problems || a.extra.length - b.extra.length || a.result.peakKw - b.result.peakKw)[0];
   const current = simulateMeasures(fromUser, s);
   const label = fromUser.length ? 'Your plan' : "Today's schedule";
   return {
@@ -647,6 +653,10 @@ export const SAMPLE_PROBLEM =
   'Tower A goes over its contracted capacity every weekday morning, around 08:00 as people start arriving. ' +
   'At Tower A I start the chillers at six at half load, bring the AHUs on in two groups twenty minutes apart, ' +
   'and push EV charging to after ten. The spike drops and the floors are still cool by nine.';
+
+/** The demo comment: rough on purpose. It proposes the one measure the agent never picks, at +1 °C. */
+export const SAMPLE_COMMENT =
+  'we cld also bump the setpoint up 1 degree from 7.30 to 10.30, tenants wont notice n the chillers work less during the rush';
 
 export const SAMPLE_ANSWERS: Record<string, string> = {
   'energy-tradeoff': "Yes. The chillers settle to a lower holding load after pre-cooling, so the earlier start roughly pays for itself. We'll confirm on the meter after two weeks.",

@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { applyReading, cleanReading, readWithRules } from '../shared/comments.ts';
 import { applyAction, newCase, seedPills, USERS, type Case } from '../shared/flow.ts';
-import { settingsFor, simulateMeasures } from '../shared/model.ts';
+import { SAMPLE_COMMENT, settingsFor, simulateMeasures } from '../shared/model.ts';
 import { createApi } from './api.ts';
 import { openStore } from './store.ts';
 
@@ -73,6 +73,27 @@ test('a comment changes the plan and the simulation; undo puts it back', () => {
   const undone = applyAction(after, { type: 'undoComment', id: after.comments[0].id }, engineer, now, pills).case;
   assert.deepEqual(undone.tuning, {});
   assert.equal(undone.comments.length, 0);
+});
+
+test('the demo comment adds the setpoint measure unticked; ticking it changes the simulation', () => {
+  const c = drafted();
+  assert.ok(!c.measures.includes('setpoint'), 'the agent never proposes it');
+  const reading = readWithRules(SAMPLE_COMMENT);
+  assert.equal(sets(SAMPLE_COMMENT).setpointOffsetC, 1);
+  const after = applyAction(c, { type: 'comment', text: SAMPLE_COMMENT, reading }, engineer, now, pills).case;
+  assert.deepEqual(after.own, ['setpoint']);
+  assert.deepEqual(after.measures, c.measures, 'added to the list, not ticked');
+  assert.equal(after.tuning.setpointOffsetC, 1);
+  assert.match(after.comments[0].reply, /Tick it/);
+  const ticked = applyAction(after, { type: 'update', measures: [...after.measures, 'setpoint'] }, engineer, now, pills).case;
+  const s = settingsFor(ticked.tuning);
+  // The demo: the agent's plan leaves the chiller board above 90%; the engineer's own measure brings it under.
+  assert.ok(simulateMeasures(after.measures, s).maxBoardPct.sb1 >= 90);
+  assert.ok(simulateMeasures(ticked.measures, s).maxBoardPct.sb1 < 90);
+  assert.ok(simulateMeasures(ticked.measures, s).totalKwh < simulateMeasures(after.measures, s).totalKwh - 400);
+  const undone = applyAction(after, { type: 'undoComment', id: after.comments[0].id }, engineer, now, pills).case;
+  assert.deepEqual(undone.own, []);
+  assert.deepEqual(undone.tuning, {});
 });
 
 test('undo is refused once the plan has moved on, and only the engineer can comment', () => {

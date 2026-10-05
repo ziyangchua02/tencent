@@ -29,6 +29,8 @@ export interface CommentEntry {
   fallbackReason?: string;
   reply: string;
   applied: AppliedChange[];
+  /** Measures this comment put on the list for the first time ("Added by me"), unticked. */
+  proposed?: MeasureId[];
   notes: string[];
   ignored: string[];
   before: Plan;

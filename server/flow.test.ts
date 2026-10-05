@@ -33,9 +33,11 @@ test('sending needs an agent proposal, at least one measure and a confirmation',
   assert.throws(() => act({ ...proposed, measures: [], confirmed: true }, { type: 'submit' }), /at least one measure/);
 });
 
-test('the agent proposal clears every check, and the server re-simulates the evidence', () => {
+test('the agent proposal leaves SB-1 above 90% for the engineer, and the server re-simulates the evidence', () => {
   const c = issued();
   assert.deepEqual(c.measures, ['precool', 'stagger', 'ahuGroups', 'evShift']);
+  assert.equal(c.agent?.clear, false);
+  assert.equal(c.evidence?.verdicts[2], 'concern');
   assert.equal(c.status, 'submitted');
   assert.equal(c.evidence?.baselinePeakKw, 3150);
   assert.equal(c.evidence?.peakKw, 2600);
