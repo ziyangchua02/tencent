@@ -145,7 +145,6 @@ function Review({ c, pills }: { c: Case; pills: Pill[] }) {
 
 function Glance({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel }) {
   const ev = c.evidence!;
-  const skipped = model.questions.filter((q) => !c.answers[q.id]?.trim()).length;
   const n = (k: Verdict) => model.review.comments.filter((x) => x.verdict === k).length;
   return (
     <>
@@ -160,7 +159,6 @@ function Glance({ c, pills, model }: { c: Case; pills: Pill[]; model: CaseModel 
             {MEASURES.filter((m) => c.measures.includes(m.id)).map((m) => <li key={m.id}><strong>{m.title}</strong>{c.own.includes(m.id) && <span className="origin origin--own">Added by the engineer</span>}<SourceTag id={m.id} pills={pills} /><TunedSettings measure={m.id} tuning={c.tuning} /></li>)}
           </ul>
           <blockquote className="quote">{c.problem}</blockquote>
-          {skipped > 0 && <p className="callout callout--warn"><Icon name="alert" size={16} />The engineer skipped {skipped} of {model.questions.length} reviewer questions.</p>}
         </section>
         <section className="viewport">
           <header className="viewport-head"><h2 className="view-title">Load drawing · revision {c.revision}</h2></header>

@@ -3,7 +3,7 @@ import { useMemo, type ReactNode } from 'react';
 import { health, searchLibrary, userById, type Case, type Pill } from '../../shared/flow.ts';
 import {
   actionsFor, baseline, BOARD_NAMES, BOARDS, boardStatus, CHILLER, checkSelection, diagnose, fmtKw, fmtTime, LOADS,
-  MEASURES, measureById, PILL_NAME, PILL_SETTINGS, questionsFor, reviewAgents, SCHEDULE, STEP_H, TARIFF,
+  MEASURES, measureById, PILL_NAME, PILL_SETTINGS, reviewAgents, SCHEDULE, STEP_H, TARIFF,
   TODAY_SETTINGS, TOWER, simulateMeasures, ARRIVAL, settingsFor, TUNING_IDS, TUNING_FIELDS, describeValue, currentValue,
   type Actions, type MeasureId, type SimResult, type Tuning,
 } from '../../shared/model.ts';
@@ -20,7 +20,6 @@ export function useCaseModel(c: Case, pills: Pill[]) {
       base, fix, settings,
       diagnosis: diagnose(base),
       notes: checkSelection(c.measures, fix, base, settings),
-      questions: questionsFor(c.measures, fix, base, settings),
       review: reviewAgents(base, fix),
       matches: searchLibrary(c.measures, pills),
     };
@@ -137,7 +136,6 @@ export function CheckPill({ pill }: { pill: Pill }) {
 export function PillDrawing({ c, model, pills }: { c: Case; model: CaseModel; pills: Pill[] }) {
   const chosen = MEASURES.filter((m) => c.measures.includes(m.id));
   const checks = model.matches.filter((m) => m.role === 'check');
-  const answered = model.questions.filter((q) => c.answers[q.id]?.trim()).length;
   return (
     <article className="pill-sheet">
       <header className="pill-sheet-head">
@@ -165,17 +163,6 @@ export function PillDrawing({ c, model, pills }: { c: Case; model: CaseModel; pi
           {checks.map((m) => <CheckPill key={m.pill.id} pill={m.pill} />)}
         </section>
       )}
-      <section>
-        <h4>Captured know-how <span className="muted">({answered} of {model.questions.length} questions answered)</span></h4>
-        <dl className="knowhow">
-          {model.questions.map((q) => (
-            <div key={q.id} className="knowhow-row">
-              <dt><span className={`perspective perspective--${q.perspective.split(' ')[0].toLowerCase()}`}>{q.perspective}</span>{q.question}</dt>
-              <dd className={c.answers[q.id]?.trim() ? '' : 'skipped'}>{c.answers[q.id]?.trim() || 'Skipped by the engineer.'}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
       {chosen.length > 0 && (
         <section>
           <h4>Known trade-offs</h4>

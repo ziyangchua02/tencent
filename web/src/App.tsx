@@ -139,7 +139,7 @@ const ROLE_COPY: Record<User['role'], { does: string; cta: string }> = {
   engineer: { does: 'Define the problem, let the agent assemble a fix from existing pills, check it in simulation and send it for approval.', cta: 'Sign in as the engineer' },
   manager: { does: 'Review the evidence and the agents’ verdicts. Approve and rate, then execute; or return it with comments.', cta: 'Sign in as the manager' },
 };
-const FLOW = ['Define the problem', 'Agent finds pills', 'Simulate and tweak', 'Agent asks questions', 'Engineer confirms', 'Manager approves or returns', 'Execute and rate'];
+const FLOW = ['Define the problem', 'Agent finds pills', 'Simulate and tweak', 'Engineer confirms', 'Manager approves or returns', 'Execute and rate'];
 
 function Login() {
   const { signIn, state } = useApp();

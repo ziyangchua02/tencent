@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { samePlan } from '../../shared/comments.ts';
 import { health, isEscalated, USERS, type Case, type Pill } from '../../shared/flow.ts';
 import {
-  baseline, BOARD_NAMES, fmtKw, fmtTime, MEASURES, OUT_OF_SCOPE, PERSPECTIVES, SAMPLE_ANSWERS, SAMPLE_COMMENT, simulateMeasures, TOWER,
+  baseline, BOARD_NAMES, fmtKw, fmtTime, MEASURES, OUT_OF_SCOPE, SAMPLE_COMMENT, simulateMeasures, TOWER,
   type Measure, type MeasureId,
 } from '../../shared/model.ts';
 import {
@@ -14,7 +14,7 @@ import {
   Disclosure, Explained, FooterNav, Icon, LevelChip, NoteLine, overallLevel, Stamp, Stars, Stepper, when,
 } from './ui.tsx';
 
-const STEPS = ['Define problem', 'Pills & questions', 'Confirm & send'];
+const STEPS = ['Define problem', 'Pills & plan', 'Confirm & send'];
 
 // ---------- my cases ----------
 
@@ -239,7 +239,7 @@ function ProblemStep({ c, model, onDone }: { c: Case; model: CaseModel; onDone: 
           </div>
         </section>
       </div>
-      <FooterNav next={next} nextLabel={c.agent && c.agent.problem === draft.value ? 'Next: pills & questions' : 'Find pills for this problem'}
+      <FooterNav next={next} nextLabel={c.agent && c.agent.problem === draft.value ? 'Next: pills & plan' : 'Find pills for this problem'}
         nextDisabled={!draft.value.trim()} hint="Describe the problem to continue" busy={busy} />
     </>
   );
@@ -336,7 +336,7 @@ function SoloChart({ m, base, chart, model }: { m: Measure; base: CaseModel['bas
 }
 
 // step 2 · the agent searches pills + playbook and proposes a plan, the simulation checks it,
-// and the engineer tweaks it by ticking, commenting and answering the agent's questions (the loop)
+// and the engineer tweaks it by ticking and commenting (the loop)
 
 function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model: CaseModel; setStep: (i: number) => void }) {
   const { act } = useApp();
@@ -350,29 +350,19 @@ function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model:
   const others = matches.filter((m) => m.role === 'related' || m.role === 'none');
   const fromYou = Object.keys(agent.mentioned).length;
   const replan = async () => { setBusy(true); await act(c.id, { type: 'replan' }); setBusy(false); };
-  const draft = useDraft(c.answers, (v) => void act(c.id, { type: 'update', answers: v }, (x) => ({ ...x, answers: v })));
-  const qs = model.questions;
-  const answered = qs.filter((q) => draft.value[q.id]?.trim()).length;
-  const fillSample = () => {
-    const v = { ...draft.value };
-    for (const q of qs) if (!v[q.id]?.trim() && SAMPLE_ANSWERS[q.id]) v[q.id] = SAMPLE_ANSWERS[q.id];
-    draft.onChange(v);
-  };
-  const leave = (to: number) => { const v = draft.take(); void act(c.id, { type: 'update', answers: v }); setStep(to); };
   return (
     <>
       <div className="section-head">
         <div>
-          <h2>Questions, and your own comments</h2>
-          <p className="muted">Your comments change the plan, and the simulation re-runs. Your answers go to the manager as the pill's captured know-how.</p>
+          <h2>Review the plan</h2>
+          <p className="muted">Your comments change the plan, and the simulation re-runs.</p>
         </div>
       </div>
       <section className="agent-bar" aria-live="polite">
         <span className="agent-badge"><Icon name="search" size={14} />Agent</span>
         <p>
-          Searched <strong>{library.length} pills</strong> in the library and <strong>{MEASURES.length + OUT_OF_SCOPE.length} practices</strong> in the domain playbook.
-          {' '}{fromYou ? <>Found <strong>{fromYou}</strong> measure{fromYou > 1 ? 's' : ''} in your notes</> : <>Found no measure in your notes</>}
-          {agent.added.length ? <>, added <strong>{agent.added.length}</strong></> : null}, and used <strong>{usedPills.length} existing pill{usedPills.length === 1 ? '' : 's'}</strong>.
+          Checked <strong>{library.length} pills</strong> and <strong>{MEASURES.length + OUT_OF_SCOPE.length} practices</strong>:
+          {' '}<strong>{fromYou}</strong> from your notes{agent.added.length ? <>, <strong>{agent.added.length}</strong> added</> : null}, <strong>{usedPills.length}</strong> existing pill{usedPills.length === 1 ? '' : 's'} used.
         </p>
         <div className="agent-bar-side">
           <LevelChip level={level} />
@@ -391,7 +381,7 @@ function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model:
       <div className="grid grid--pills">
         <section className="proposal">
           <h2>Proposed solution</h2>
-          <p className="muted">Tick or untick a measure, or tell the agent what to change below. Every change re-runs the simulation.</p>
+          <p className="muted">Tick or untick a measure, or comment below. Every change re-runs the simulation.</p>
           <MeasureList c={c} pills={pills} model={model} />
 
           {checks.length > 0 && (
@@ -404,35 +394,6 @@ function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model:
 
           <CommentsSection c={c} />
 
-          <div className="questions-block">
-            <div className="section-head section-head--tight">
-              <h2>The agent's questions</h2>
-              <div className="section-head-side">
-                <span className={`chip chip--${answered === qs.length ? 'ok' : 'info'}`}>{answered} of {qs.length} answered</span>
-                <button type="button" className="link-btn" onClick={fillSample}>Use the example answers</button>
-              </div>
-            </div>
-            <p className="muted">Optional, but the manager sees which ones you skipped.</p>
-            <div className="questions">
-              {PERSPECTIVES.map((p) => {
-                const mine = qs.filter((q) => q.perspective === p);
-                if (!mine.length) return null;
-                return (
-                  <fieldset key={p} className="question-group">
-                    <legend><span className={`perspective perspective--${p.split(' ')[0].toLowerCase()}`}>{p}</span></legend>
-                    {mine.map((q) => (
-                      <div key={q.id} className="field">
-                        <label htmlFor={`answer-${q.id}`}><Explained text={q.question} /></label>
-                        <textarea id={`answer-${q.id}`} rows={2} value={draft.value[q.id] ?? ''} onBlur={draft.onBlur}
-                          onChange={(e) => draft.onChange({ ...draft.value, [q.id]: e.target.value })} />
-                      </div>
-                    ))}
-                  </fieldset>
-                );
-              })}
-            </div>
-          </div>
-
           <Disclosure summary={`Other pills the agent looked at (${others.length})`}>
             <ul className="others">
               {others.map((m) => (
@@ -444,13 +405,10 @@ function PlanStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; model:
               ))}
             </ul>
           </Disclosure>
-          <Disclosure summary="Ideas that need building works (not part of this pill)">
-            <ul className="others">{OUT_OF_SCOPE.map((o) => <li key={o.title}><strong>{o.title}.</strong> <span className="muted">{o.note}</span></li>)}</ul>
-          </Disclosure>
         </section>
         <SimulationPanel c={c} model={model} />
       </div>
-      <FooterNav back={() => leave(0)} next={() => leave(2)} nextLabel="Next: confirm & send"
+      <FooterNav back={() => setStep(0)} next={() => setStep(2)} nextLabel="Next: confirm & send"
         nextDisabled={c.measures.length === 0} hint="Pick at least one measure" />
     </>
   );
@@ -552,7 +510,7 @@ function ConfirmStep({ c, pills, model, setStep }: { c: Case; pills: Pill[]; mod
           )}
           <label className="confirm-check">
             <input type="checkbox" checked={c.confirmed} onChange={(e) => { const v = e.target.checked; void act(c.id, { type: 'update', confirmed: v }, (x) => ({ ...x, confirmed: v })); }} />
-            <span>I confirm this is how I would run {c.asset}, and the answers are my own.</span>
+            <span>I confirm this is how I would run {c.asset}.</span>
           </label>
         </aside>
       </div>

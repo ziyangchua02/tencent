@@ -1,8 +1,8 @@
 // Cases, pills and the governed workflow. Pure functions: the server applies them,
 // the tests exercise them, the browser reads the same types.
 import {
-  baseline, detectMentions, fmtKw, MEASURE_IDS, measureById, PILL_NAME, questionsFor, recommend, reviewAgents,
-  SAMPLE_ANSWERS, SAMPLE_PROBLEM, settingsFor, simulateMeasures, TOWER,
+  baseline, detectMentions, fmtKw, MEASURE_IDS, measureById, PILL_NAME, recommend, reviewAgents,
+  SAMPLE_PROBLEM, settingsFor, simulateMeasures, TOWER,
   type MeasureId, type Tuning, type Verdict,
 } from './model.ts';
 import { applyReading, defaultReply, samePlan, type CommentEntry, type Reading } from './comments.ts';
@@ -229,7 +229,6 @@ export interface Case {
   own: MeasureId[];
   comments: CommentEntry[];
   simRuns: number;
-  answers: Record<string, string>;
   confirmed: boolean;
   revision: number;
   issues: { revision: number; at: string }[];
@@ -242,7 +241,7 @@ export interface Case {
 export function newCase(id: string, engineerId: string, now: string): Case {
   return {
     id, title: `${TOWER.name} morning demand spike`, asset: TOWER.name, engineerId, createdAt: now, updatedAt: now,
-    status: 'drafting', problem: SAMPLE_PROBLEM, agent: null, measures: [], tuning: {}, own: [], comments: [], simRuns: 0, answers: {}, confirmed: false,
+    status: 'drafting', problem: SAMPLE_PROBLEM, agent: null, measures: [], tuning: {}, own: [], comments: [], simRuns: 0, confirmed: false,
     revision: 0, issues: [], evidence: null, decisions: [], pillId: null, liveAt: null,
   };
 }
@@ -271,7 +270,7 @@ export class FlowError extends Error {
 }
 
 export type Action =
-  | { type: 'update'; problem?: string; measures?: string[]; answers?: Record<string, string>; confirmed?: boolean }
+  | { type: 'update'; problem?: string; measures?: string[]; confirmed?: boolean }
   | { type: 'runAgent' }
   | { type: 'replan' }
   | { type: 'comment'; text: string; reading?: Reading }
@@ -325,12 +324,6 @@ export function applyAction(c: Case, action: Action, actor: User, now: string, p
         next.measures = cleanMeasures(action.measures);
         if (next.measures.join() !== c.measures.join()) next.simRuns = c.simRuns + 1;
         changed.push('measures');
-      }
-      if (action.answers !== undefined) {
-        const answers: Record<string, string> = {};
-        for (const [k, v] of Object.entries(action.answers ?? {})) answers[text(k, 60, 'Question id')] = text(v, 1000, 'Answer');
-        next.answers = answers;
-        changed.push('answers');
       }
       if (action.confirmed !== undefined) { next.confirmed = action.confirmed === true; changed.push('confirmation'); }
       return { case: next, detail: `Updated ${changed.join(', ') || 'nothing'}.` };
@@ -466,15 +459,10 @@ function pillFromCase(c: Case, d: Decision, pills: Pill[]): Pill {
   const ms = c.measures.map((m) => measureById(m)!);
   const matches = searchLibrary(c.measures, pills);
   const settings = settingsFor(c.tuning);
-  const fix = simulateMeasures(c.measures, settings);
-  const questions = questionsFor(c.measures, fix, baseline(), settings);
-  const knowHow = [
-    ...questions.filter((q) => c.answers[q.id]?.trim()).map((q) => ({ question: q.question, answer: c.answers[q.id].trim() })),
-    ...c.comments.map((x) => ({
-      question: 'Engineer\u2019s comment to the agent',
-      answer: x.text + (x.applied.length ? ` (Changed: ${x.applied.map((a) => `${a.label} ${a.from} → ${a.to}`).join('; ')}.)` : ''),
-    })),
-  ];
+  const knowHow = c.comments.map((x) => ({
+    question: 'Engineer\u2019s comment to the agent',
+    answer: x.text + (x.applied.length ? ` (Changed: ${x.applied.map((a) => `${a.label} ${a.from} → ${a.to}`).join('; ')}.)` : ''),
+  }));
   const date = d.at.slice(0, 10);
   return {
     id: existing?.id ?? nextPillId(pills),
@@ -487,7 +475,6 @@ function pillFromCase(c: Case, d: Decision, pills: Pill[]): Pill {
     steps: ms.map((m) => `${m.title}. ${m.simChange(settings)}`),
     guardrails: [
       `Any power board over its rating escalates to the ${ESCALATION_ROLE}.`,
-      ...(c.answers['general-conditions']?.trim() ? [c.answers['general-conditions'].trim()] : []),
     ],
     tools: ['BMS schedules', ...(c.measures.includes('evShift') ? ['Charger load manager'] : [])],
     knowHow,
@@ -517,7 +504,7 @@ export function sampleCase(id: string, now: string, pills: Pill[]): Case {
   const engineer = USERS.find((u) => u.role === 'engineer')!;
   let c = newCase(id, engineer.id, now);
   c = applyAction(c, { type: 'runAgent' }, engineer, now, pills).case;
-  c = { ...c, answers: { ...SAMPLE_ANSWERS }, confirmed: true };
+  c = { ...c, confirmed: true };
   return applyAction(c, { type: 'submit' }, engineer, now, pills).case;
 }
 

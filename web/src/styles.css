@@ -558,18 +558,7 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .proposal > .disclosure { margin-top: var(--s5); }
 .simulation { position: sticky; top: 74px; }
 
-/* ---------- step 2: questions ---------- */
 
-.questions { display: grid; gap: var(--s4); }
-.question-group { margin: 0; padding: var(--s3) var(--s4) var(--s4); background: var(--sheet); border: 1px solid var(--rule); }
-.question-group legend { padding: 0 var(--s2); margin-left: calc(-1 * var(--s2)); }
-.question-group .field:first-of-type { margin-top: var(--s2); }
-.question-group label { font-weight: 500; }
-.perspective { display: inline-block; font-family: var(--cond); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.07em; text-transform: uppercase; }
-.perspective--energy { color: var(--proposed-ink); }
-.perspective--tenant { color: #7a3d8c; }
-.perspective--technical { color: var(--rev); }
-.perspective--general { color: var(--ink-2); }
 
 /* ---------- step 3 and the pill sheet ---------- */
 
@@ -589,9 +578,7 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .proposal .measure-list { margin: var(--s3) 0 var(--s4); }
 .knowhow { margin: 0; display: grid; gap: var(--s3); }
 .knowhow-row dt { font-weight: 500; color: var(--ink-2); font-size: 0.92rem; }
-.knowhow-row dt .perspective { margin-right: var(--s2); }
-.knowhow-row dd { margin: 2px 0 0; padding-left: var(--s3); border-left: 2px solid var(--proposed); }
-.knowhow-row dd.skipped { color: var(--ink-3); font-style: italic; border-left-color: var(--rule); }
+.knowhow-row dt .knowhow-row dd { margin: 2px 0 0; padding-left: var(--s3); border-left: 2px solid var(--proposed); }
 .tradeoffs { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--ink-2); }
 
 .status-panel { background: var(--sheet); border: 1px solid var(--rule); padding: var(--s5); display: grid; gap: var(--s3); justify-items: start; }
@@ -770,7 +757,6 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .comment-ignored li { display: flex; gap: 6px; align-items: flex-start; }
 .comment-ignored .icon { margin-top: 3px; }
 .comment-meta { color: var(--ink-3); font-size: 0.84rem; }
-.questions-block { margin-top: var(--s6); }
 .section-head--tight { margin: 0 0 var(--s1); }
 .sheet-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
 .sheet-comments li { display: grid; gap: 4px; font-size: 0.92rem; }

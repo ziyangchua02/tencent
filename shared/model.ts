@@ -610,41 +610,6 @@ export function recommend(fromUser: readonly MeasureId[], s: Settings = PILL_SET
   };
 }
 
-export const PERSPECTIVES = ['Energy', 'Tenant Experience', 'Technical Services', 'General'] as const;
-export type Perspective = (typeof PERSPECTIVES)[number];
-export interface Question { id: string; perspective: Perspective; question: string }
-
-/** Questions a reviewer would ask about this particular selection. */
-export function questionsFor(measures: readonly string[], fix: SimResult, base: SimResult, s: Settings = PILL_SETTINGS): Question[] {
-  const has = (m: string) => measures.includes(m);
-  const cap = TOWER.contractedCapacityKw;
-  const stressed = BOARDS.filter((b) => fix.maxBoardPct[b] >= 90).sort((x, y) => fix.maxBoardPct[y] - fix.maxBoardPct[x]);
-  const dKwh = fix.totalKwh - base.totalKwh;
-  const stacked = stackedStarts(fix.actions.chillerStarts);
-  const q: Question[] = [];
-  q.push({
-    id: 'energy-tradeoff', perspective: 'Energy',
-    question: dKwh > 1
-      ? `This adds about ${Math.round(dKwh)} kWh a day to run (extra chiller and AHU runtime). What's the case that the peak cut is worth that?`
-      : dKwh < -1
-        ? `Energy drops by about ${Math.round(Math.abs(dKwh))} kWh a day too. Does that match what you'd expect from the changes you made, or is it worth double-checking?`
-        : 'Energy use barely moves. Is the peak cut alone worth proposing this, or does it need to save energy too to be worth the change?',
-  });
-  if (fix.peakKw > cap) q.push({ id: 'energy-still-over', perspective: 'Energy', question: `Peak is still ${fmtKw(fix.peakKw - cap)} over the ${fmtKw(cap)} cap. Does another measure close the rest of the gap, or is this pill one step of several?` });
-  if (fix.comfortHoursAtRisk > 0) q.push({ id: 'tenant-comfort', perspective: 'Tenant Experience', question: `Floors aren't ready until ${fmtTime(Math.max(...fix.floorsReadyAt))}, against a ${fmtTime(ARRIVAL[0])} arrival. Who should hear that before a tenant reports it?` });
-  if (has('setpoint')) q.push({ id: 'tenant-setpoint', perspective: 'Tenant Experience', question: `The setpoint runs +${s.setpoint.offsetC}°C between ${fmtTime(s.setpoint.window[0])} and ${fmtTime(s.setpoint.window[1])}. Who signs off on that, and how would you find out if someone was uncomfortable?` });
-  if (!q.some((x) => x.perspective === 'Tenant Experience')) q.push({ id: 'tenant-general', perspective: 'Tenant Experience', question: 'Nothing here changes comfort on paper. What would tell you that assumption is wrong in practice?' });
-  if (stressed.length) {
-    const b = stressed[0];
-    q.push({ id: 'tech-board', perspective: 'Technical Services', question: `${BOARD_NAMES[b]} reaches ${Math.round(fix.maxBoardPct[b])}% at ${fmtTime(fix.maxBoardAt[b])}. Is that inside what Technical Services will sign off on?` });
-  }
-  if (stacked > 1) q.push({ id: 'tech-stacked', perspective: 'Technical Services', question: `${stacked} chillers still start within the ${CHILLER.inrushMin}-minute surge window. Is that within limits, or does the stagger need to widen?` });
-  if (!q.some((x) => x.perspective === 'Technical Services')) q.push({ id: 'tech-general', perspective: 'Technical Services', question: "What happens if a chiller or AHU doesn't start on schedule? Does the sequence recover on its own, or does someone need to step in?" });
-  q.push({ id: 'general-conditions', perspective: 'General', question: "Is there an outdoor temperature or humidity above which you wouldn't run this schedule?" });
-  q.push({ id: 'general-watch', perspective: 'General', question: "What's the first sign it isn't working, that a building manager should watch for?" });
-  return q;
-}
-
 // ---------- sample content (from the artifact) ----------
 
 export const PILL_NAME = 'Morning start-up peak shaving';
@@ -657,11 +622,3 @@ export const SAMPLE_PROBLEM =
 /** The demo comment: rough on purpose. It proposes the one measure the agent never picks, at +1 °C. */
 export const SAMPLE_COMMENT =
   'we cld also bump the setpoint up 1 degree from 7.30 to 10.30, tenants wont notice n the chillers work less during the rush';
-
-export const SAMPLE_ANSWERS: Record<string, string> = {
-  'energy-tradeoff': "Yes. The chillers settle to a lower holding load after pre-cooling, so the earlier start roughly pays for itself. We'll confirm on the meter after two weeks.",
-  'tenant-general': 'Helpdesk calls about warm floors before 09:30, and lobby readings above 25°C.',
-  'tech-general': 'The BMS retries a failed start after 10 minutes. If a chiller faults, the duty engineer is alarmed and starts the standby by hand.',
-  'general-conditions': "If it's above 30°C outdoors at 06:00, start pre-cooling 30 minutes earlier.",
-  'general-watch': 'Floors still above 25°C at 08:45, or the chiller power board climbing past 90% at start-up.',
-};
