@@ -3,7 +3,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { createApi } from './api.ts';
-import { openStore } from './store.ts';
+import { ensureSeedPdfs, openStore } from './store.ts';
 
 try { process.loadEnvFile(); } catch { /* no .env file: use the real environment */ }
 
@@ -15,7 +15,9 @@ const TYPES: Record<string, string> = {
   '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json',
 };
 
-const api = createApi(openStore(process.env.DB_PATH ?? 'data/pills.db'));
+const store = openStore(process.env.DB_PATH ?? 'data/pills.db');
+await ensureSeedPdfs(store);
+const api = createApi(store);
 
 function serveStatic(path: string, res: import('node:http').ServerResponse) {
   const file = normalize(join(DIST, decodeURIComponent(path)));

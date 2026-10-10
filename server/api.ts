@@ -10,7 +10,7 @@ import { chunkPill } from './chunker.ts';
 import { generatePillPdf } from './pdf.ts';
 import { ask } from './retrieval.ts';
 import type { AskResponse } from '../shared/retrieval-types.ts';
-import type { Store } from './store.ts';
+import { ensureSeedPdfs, type Store } from './store.ts';
 
 type Next = () => void;
 const MAX_BODY = 64 * 1024;
@@ -274,6 +274,7 @@ export function createApi(store: Store) {
 
       if (path === '/api/reset') {
         store.reset(now, actor.name);
+        await ensureSeedPdfs(store);
         changed();
         return send(res, 200, { state: state() });
       }
