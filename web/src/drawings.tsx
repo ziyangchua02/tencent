@@ -94,7 +94,7 @@ export function SingleLine({ today, proposal, mine, revision, caption }: { today
   return (
     <figure className="sld">
       <div className="scroll-x" ref={ref}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
           {/* intake */}
           <circle cx={W / 2} cy={16} r={11} className="sld-sym" />
           <circle cx={W / 2} cy={30} r={11} className="sld-sym" />
@@ -419,7 +419,7 @@ export function Timeline({ today, pill, window: [w0, w1] = [5, 16] }: { today: A
         </span>
       </figcaption>
       <div className="scroll-x" ref={ref}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" className="timeline"
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" className="timeline"
           aria-label={rows.map((r) => `${r.name}: today ${r.today ? fmtTime(r.today.from) : 'none'}, proposal ${r.pill ? fmtTime(r.pill.from) : 'none'}`).join('; ')}>
           <rect x={X(SCHEDULE.liftsRush[0])} y={TOP} width={X(SCHEDULE.liftsRush[1]) - X(SCHEDULE.liftsRush[0])} height={rows.length * RH} className="chart-band" />
           <text x={X(SCHEDULE.liftsRush[0]) + 4} y={TOP - 8} className="chart-note">Arrival rush</text>

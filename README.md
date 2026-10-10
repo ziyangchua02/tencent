@@ -1,7 +1,7 @@
 # Intelligence Pills
 
 Keppel track, Tencent Cloud "AI CAN DO IT" Hackathon Singapore 2026 (case study: AI HARVEST, Energy Optimisation).
-React + Vite frontend and a dependency-free Node server (built-in `node:sqlite`) in one repo, shipped as one container.
+React + Vite frontend and a dependency-free Node server (built-in `node:sqlite`) in one repo, shipped as one container. The server uses Google Gemini for comment reading and library question answering, with offline rules fallback when no key is set. Pill PDFs are generated with `pdf-lib` (pure JS).
 
 ## Run locally
 
@@ -11,7 +11,7 @@ Needs Node 22.18 or newer.
 npm ci
 cp .env.example .env      # add GEMINI_API_KEY; without it, offline rules read engineer comments
 npm run dev               # http://127.0.0.1:5173
-npm test                  # governance and comment rules
+npm test                  # governance, comment rules, HTTP layer, and seed PDF tests
 ```
 
 Production build, one process on port 8080:
@@ -19,6 +19,14 @@ Production build, one process on port 8080:
 ```sh
 npm run build && npm start
 ```
+
+## Library Q&A and pill PDFs
+
+The server answers questions about the pill library via `POST /api/ask`, using hybrid search (FTS5 keyword + optional Gemini embeddings) over pills chunked by section. Answers include citations to the pill chunks they came from, or are refused on weak evidence. Only approved and live pills are searchable.
+
+Every pill gets a PDF on approval (generated after the DB transaction commits, so a rollback never leaves an orphan). Seeded pills have PDFs on first start and after a demo reset. Download any pill's PDF at `GET /api/pills/:id/pdf`.
+
+Gemini paths (`/api/ask` and comment reading) share a per-user rate limit of 10 model calls per minute.
 
 ## Notification emails
 

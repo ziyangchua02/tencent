@@ -45,7 +45,7 @@ Engineers do not write pills by hand ("engineer write pill" was struck out). Two
 - Three review agents (Energy, Tenant Experience, Technical Services) give support / concern / block. A board over 100 % escalates to the Head of Technical Services and disables approval.
 - Pill health = the manager's 1–5 star rating only (user decision, 2026-10-04).
 - Certification is out of scope (user decision, 2026-10-04).
-- The agent is deterministic in this build; an LLM hook exists for later.
+- The agent reads engineer comments with Google Gemini (default `gemini-3.5-flash`; `gemini-2.5-flash` is no longer offered to new keys, `gemini-3.8-flash` failed on demand errors on 2026-10-05) and falls back to offline rules when no key is set or the call fails. The library question endpoint (`/api/ask`) uses Gemini for both semantic search (text embeddings, cosine similarity re-ranking) and answer synthesis, with a keyword-only fallback. All Gemini paths share a per-user rate limit of 10 model calls per minute.
 
 ## Evidence on Hand
 
@@ -89,6 +89,10 @@ Comment reading: the engineer's free-text comment is read by Gemini (default `ge
 
 Pill library search (`searchLibrary`): each existing pill is matched to the selected measures as `measure` (carries it), `check` (required guard), `related` (same system) or `none`.
 
+Pill library Q&A (`POST /api/ask`): questions are answered from approved and live pills only, using hybrid search (FTS5 keyword + optional Gemini text embeddings with cosine similarity re-ranking) and answer synthesis (Gemini when a key is set, rules-based otherwise). Every answer includes citations to the pill chunks it came from, or is refused on weak evidence. Each pill is chunked by section on approval (or re-approval) into an FTS5 index for retrieval.
+
+Pill PDFs: every approved pill gets a PDF generated after the DB transaction commits. Seeded pills have PDFs generated on first start and after reset (`ensureSeedPdfs`). `GET /api/pills/:id/pdf` serves the stored PDF, or generates one on demand as a fallback.
+
 Seed pills: PILL-0007 chiller soft-start and stagger, PILL-0012 managed EV charging window, PILL-0015 HVAC electrical check before a start-up change (required check), PILL-0004 warm-floor complaint triage, PILL-0009 cooling tower fans on wet-bulb.
 
 ## Architecture
@@ -97,15 +101,21 @@ One repo, one container. React 19 + Vite + TypeScript front end; dependency-free
 
 ```
 shared/   pure TS, runs in browser AND server
-  model.ts     simulator, measures, TUNING_FIELDS, review agents, recommend()
-  flow.ts      Pill, Case, USERS, seedPills, searchLibrary, applyAction (state machine)
-  comments.ts  Reading/ProposedChange types, offline rules reader, cleanReading()
+  model.ts             simulator, measures, TUNING_FIELDS, review agents, recommend()
+  flow.ts              Pill, Case, USERS, seedPills, searchLibrary, applyAction (state machine)
+  comments.ts          Reading/ProposedChange types, offline rules reader, cleanReading()
+  retrieval-types.ts   Chunk, SearchHit, Citation, Answer, AskRequest, AskResponse
 server/
   main.ts      entry (static site + API, port 8080)
-  api.ts       GET /api/state, /api/profile, /api/events (SSE);
-               POST /api/cases, /api/cases/:id/actions, /api/sample, /api/profile(/test), /api/reset
-  store.ts     SQLite: docs(kind,id,json) for cases/pills/profiles; append-only audit table
+  api.ts       GET /api/state, /api/profile, /api/events (SSE), /api/pills/:id/pdf;
+               POST /api/cases, /api/cases/:id/actions, /api/sample, /api/ask, /api/profile(/test), /api/reset
+  store.ts     SQLite: docs(kind,id,json) for cases/pills/profiles; append-only audit table; chunks + FTS5 index; pdf_store; ensureSeedPdfs()
+  static.ts    static file serving from dist/ with path-traversal protection
   gemini.ts    comment reader (Gemini, falls back to rules)
+  retrieval.ts governed retrieval: role/status filtering, answer synthesis, citations, refusal on weak evidence
+  search.ts    hybrid search: FTS5 keyword + optional Gemini embeddings (cosine similarity)
+  chunker.ts   chunks pill JSON by section for FTS5 indexing
+  pdf.ts       generates a PDF from a pill's JSON using pdf-lib
   email.ts     Resend HTTP notifications
 web/src/       App, engineer, manager, library, profile, casekit, drawings, state, ui
 ```
@@ -114,7 +124,10 @@ Design decisions:
 - Shared simulation: the browser previews it live; the server re-runs it as the evidence of record.
 - Live updates: each state change bumps a version pushed over SSE, so two windows (one per role) stay in sync.
 - Auth: none. The `x-demo-user` header names the persona.
-- Persistence: cases and pills are JSON documents. Profiles survive a demo reset; the reset reseeds the five synthetic pills.
+- Persistence: cases and pills are JSON documents. Profiles survive a demo reset; the reset reseeds the five synthetic pills. Seeded pills get a PDF generated on first start and after reset via `ensureSeedPdfs`, so they are always available for download without waiting for approval.
+- Pill PDFs: every approved pill gets a PDF generated after the transaction commits (so a rollback never leaves an orphan). The `GET /api/pills/:id/pdf` endpoint serves stored PDFs, generating on demand as a fallback. Uses `pdf-lib` (pure JS, no native bindings).
+- Library Q&A: `POST /api/ask` answers questions from the pill library using governed retrieval — hybrid search (FTS5 keyword + optional Gemini embeddings), role/status filtering, citation-backed answers, and refusal on weak evidence.
+- Rate limiting: Gemini paths (`/api/ask` and comment reading) share a per-user limit of 10 model calls per minute, returning 429.
 - Email: Resend notifies the manager on submit and the engineer on approve or return. Each send is audit-logged without the address. Addresses are returned only to their owner.
 - The Gemini key stays on the server.
 
@@ -126,7 +139,7 @@ Design decisions:
 
 ## Known Issues
 
-- No real login: anyone with the link can reset data or spend Gemini quota.
+- No real login: anyone with the link can reset data or spend Gemini quota (rate-limited to 10 model calls per minute per user, but still no auth wall).
 - Plain HTTP on the server IP; HTTPS needs a domain.
 - The Resend key only delivers to its account owner until a domain is verified and `EMAIL_FROM` is set.
 - Render free tier loses profile changes when the instance sleeps.

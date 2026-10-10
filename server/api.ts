@@ -58,6 +58,17 @@ export function createApi(store: Store) {
   };
   const people = () => USERS.map((u) => ({ ...u, ...profileOf(u) }));
   const lastTest = new Map<string, number>();
+  // Per-user rate limit on Gemini model calls (comment reading + /api/ask).
+  const MODEL_LIMIT = 10; // calls per minute
+  const MODEL_WINDOW = 60_000;
+  const modelCalls = new Map<string, number[]>();
+  const checkModelLimit = (userId: string): number => {
+    const now = Date.now();
+    const times = (modelCalls.get(userId) ?? []).filter((t) => now - t < MODEL_WINDOW);
+    if (times.length >= MODEL_LIMIT) return Math.ceil((MODEL_WINDOW - (now - times[0])) / 1000);
+    modelCalls.set(userId, [...times, now]);
+    return 0;
+  };
   /** Send in the background and record each outcome in the audit log, without the address. */
   const deliver = (mails: Mail[], target: string) => {
     for (const m of mails) {
@@ -155,6 +166,8 @@ export function createApi(store: Store) {
           const text = typeof action.text === 'string' ? action.text.trim() : '';
           if (!text || text.length > 1000) throw new FlowError('Write a comment of up to 1,000 characters.', 400);
           if (reading.has(current.id)) throw new FlowError('The agent is still reading your last comment.');
+          const wait = checkModelLimit(actor.id);
+          if (wait > 0) throw new FlowError(`Too many requests. Wait ${wait} seconds.`, 429);
           reading.add(current.id);
           try {
             const r = await readComment(text, { measures: current.measures, tuning: current.tuning });
@@ -170,17 +183,22 @@ export function createApi(store: Store) {
           store.putCase(out.case);
           if (out.pill) {
             store.putPill(out.pill);
-            // Generate PDF and chunk the pill for search/retrieval on approval or re-approval.
+            // Chunk the pill for search/retrieval on approval or re-approval.
             try {
               store.putChunks(out.pill.id, chunkPill(out.pill));
             } catch (e) { console.warn(`Chunking ${out.pill.id} failed:`, e); }
-            void generatePillPdf(out.pill).then((pdf) => {
-              try { store.putPdf(out.pill!.id, pdf, new Date().toISOString()); } catch (e) { console.warn(`PDF store ${out.pill!.id} failed:`, e); }
-            }).catch((e) => console.warn(`PDF gen ${out.pill!.id} failed:`, e));
           }
           if (final.type !== 'update') log(final.type, current.id, out.detail);
           return out.case;
         });
+        // Generate the PDF after the commit succeeds so a rollback never leaves an orphan.
+        if (saved.pillId && !store.getPdf(saved.pillId)) {
+          const approvedPill = store.pills().find((p) => p.id === saved.pillId);
+          if (approvedPill) {
+            generatePillPdf(approvedPill).then((pdf) => store.putPdf(approvedPill.id, pdf, new Date().toISOString()))
+              .catch((e) => console.warn(`PDF gen ${approvedPill.id} failed:`, e));
+          }
+        }
         changed();
         if (final.type === 'submit' || final.type === 'approve' || final.type === 'return') deliver(caseMails(saved, final.type, people(), baseUrl(req)), saved.id);
         return send(res, 200, { state: state() });
@@ -216,6 +234,8 @@ export function createApi(store: Store) {
         const question = typeof body.question === 'string' ? body.question.trim() : '';
         if (!question) throw new FlowError('Write a question.', 400);
         if (question.length > 1000) throw new FlowError('Keep the question under 1,000 characters.', 400);
+        const wait = checkModelLimit(actor.id);
+        if (wait > 0) throw new FlowError(`Too many requests. Wait ${wait} seconds.`, 429);
         const result = await ask(store, question, store.pills(), actor.role);
         const detail = result.answer.refused
           ? `Refused: ${result.answer.reason}`

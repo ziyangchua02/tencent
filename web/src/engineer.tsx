@@ -62,7 +62,7 @@ export function CasesPage() {
         <section className="viewport">
           <header className="viewport-head"><h2 className="view-title">Case register</h2></header>
           <div className="scroll-x">
-            <table className="register">
+            <table className="register register--cases">
               <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Rev</th><th scope="col">Status</th><th scope="col">Last change</th></tr></thead>
               <tbody>
                 {mine.map((c) => (

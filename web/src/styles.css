@@ -717,7 +717,20 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
   .measure-meta, .measure-gist, .measure .disclosure { margin-left: 0; }
   .footer-nav { position: sticky; bottom: 0; background: var(--paper); padding-bottom: var(--s3); z-index: 5; }
   .flow-strip li { border-right: 0; padding-right: var(--s3); }
+  .tabs { flex-wrap: wrap; }
   .register th, .register td { padding: 8px 10px; }
+  /* Avoid horizontal scroll on phone-width tables by hiding non-essential columns. */
+  .register--queue th:nth-child(3), .register--queue td:nth-child(3),
+  .register--queue th:nth-child(4), .register--queue td:nth-child(4),
+  .register--queue th:nth-child(5), .register--queue td:nth-child(5),
+  .register--queue th:nth-child(6), .register--queue td:nth-child(6),
+  .register--queue th:nth-child(8), .register--queue td:nth-child(8),
+  .register--pills th:nth-child(3), .register--pills td:nth-child(3),
+  .register--pills th:nth-child(4), .register--pills td:nth-child(4),
+  .register--pills th:nth-child(5), .register--pills td:nth-child(5),
+  .register--pills th:nth-child(6), .register--pills td:nth-child(6),
+  .register--cases th:nth-child(3), .register--cases td:nth-child(3),
+  .register--cases th:nth-child(5), .register--cases td:nth-child(5) { display: none; }
   .toast { bottom: var(--s3); }
   .delta { white-space: normal; }
   .delta-word { display: block; }

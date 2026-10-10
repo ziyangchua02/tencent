@@ -38,7 +38,7 @@ export function LibraryPage() {
       <AskPanel />
       <section className="viewport">
         <div className="scroll-x">
-          <table className="register">
+          <table className="register register--pills">
             <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">System</th><th scope="col">Captured from</th><th scope="col">Live at</th><th scope="col">Rev</th><th scope="col">Health</th></tr></thead>
             <tbody>
               {shown.map((p) => (
