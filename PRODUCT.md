@@ -93,6 +93,8 @@ Pill library Q&A (`POST /api/ask`): questions are answered from approved and liv
 
 Pill PDFs: every approved pill gets a PDF generated after the DB transaction commits. Seeded pills have PDFs generated on first start and after reset (`ensureSeedPdfs`). `GET /api/pills/:id/pdf` serves the stored PDF, or generates one on demand as a fallback.
 
+Current PDF layout (`server/pdf.ts`) is a plain text dump on A4 with standard Helvetica: header, summary, key-value block, Steps, Guardrails, Tools, built-from / checks / know-how when present, Revisions, Health ratings, and a 7 pt "Synthetic data" footer. It carries no simulation evidence, chart, checklist boxes, approval trail, page numbers or link back to the live pill. Standard fonts cannot encode characters outside WinAnsi (for example `−`, `≥`, `→`, emoji, CJK), so a pill with such text can fail to generate; the failure is only logged as a warning. See "Planned work" for the redesign.
+
 Seed pills: PILL-0007 chiller soft-start and stagger, PILL-0012 managed EV charging window, PILL-0015 HVAC electrical check before a start-up change (required check), PILL-0004 warm-floor complaint triage, PILL-0009 cooling tower fans on wet-bulb.
 
 ## Architecture
@@ -144,5 +146,25 @@ Design decisions:
 - The Resend key only delivers to its account owner until a domain is verified and `EMAIL_FROM` is set.
 - Render free tier loses profile changes when the instance sleeps.
 - The Tencent Lighthouse free trial was unavailable on the user's account, hence Render.
+- `POST /api/reset` has no role check: any signed-in persona can wipe the demo data. Fine for a demo, not for anything shared.
+- `server/retrieval.ts` (`synthesizeGemini`) puts `signal: AbortSignal.timeout(...)` inside the JSON request body instead of the `fetch` options, so the 20 s timeout is not applied to the `/api/ask` answer call (it only serialises to `{}`). `search.ts` and `gemini.ts` use it correctly. Fix: move it next to `method` and `headers`.
+- Library page: the expanded pill view is reported to render badly (user report, not yet reproduced or diagnosed).
+- Pill PDFs are plain (see "Pill PDFs" above).
+
+## Testing
+
+`npm test` runs 64 tests (all passing at last check) in `server/*.test.ts`: governance and flow (`flow.test.ts`), comment reading (`comments.test.ts`), email (`email.test.ts`), HTTP layer and role checks (`api.test.ts`), static serving (`static.test.ts`), seeded PDFs (`seed-pdfs.test.ts`) and retrieval quality (`eval.test.ts`). `npm run typecheck` is clean. There are no browser or accessibility tests yet.
+
+## Planned Work
+
+Decided with the user; not yet built.
+
+- **PDF redesign, for managers and field technicians.** Page 1 is a manager summary: header band with status word and a prominent SYNTHETIC DATA marker, at-a-glance box (owner, sites, system, health as stars plus number), a before-and-after chart of the 96-step demand curve against the 3,000 kW cap (drawn from `simulateMeasures`, never typed in), an evidence table (peak kW, kWh, cost, comfort hours at risk, highest board %, the three reviewer verdicts) and a "Before you start" box for required checks. Later pages are a field checklist: steps with checkboxes and a done-by/time column, guardrails in a "Stop if…" box, tools, know-how, approval and revision history, and a blank sign-off block. Footer on every page: page X of Y, pill ID and revision, print date, "printed copy: check the live pill" and a link.
+- **Evidence on the pill.** Save the case's `Evidence` onto the `Pill` (optional field) when it is approved, so its PDF can show it. Seeded pills with a `measureId` re-simulate that measure. Pills the simulator does not model (PILL-0004, PILL-0009) print "No simulation evidence", never invented numbers.
+- **Embedded Unicode font** (`@pdf-lib/fontkit` plus an OFL font such as Noto Sans), the one planned dependency, so engineer-written text with any characters renders. Missing glyphs become `?` instead of throwing. Chosen over character mapping because the text can be arbitrary and the audience is in Singapore.
+- **Stored PDFs regenerate on layout change** (a layout version stored with each PDF), without overwriting a PDF of a newer approved revision.
+- **Fix the expanded-pill UI** on the Pill library page, then check it at 375, 768 and 1280 px.
+- **Fix the `/api/ask` timeout** noted under Known Issues.
+- Accessibility pass of the web app with Playwright at phone and desktop widths.
 
 See `docs/pipeline/03-build-log.md` for the dated build history.
