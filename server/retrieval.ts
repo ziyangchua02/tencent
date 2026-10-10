@@ -90,8 +90,8 @@ If the excerpts don't contain enough to answer, say so plainly. All data is synt
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: `Question: ${question}\n\nPill library excerpts:\n${context}` }] }],
         generationConfig: { temperature: 0.2 },
-        signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS) || 20_000),
       }),
+      signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS) || 20_000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };

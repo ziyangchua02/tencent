@@ -93,7 +93,7 @@ Pill library Q&A (`POST /api/ask`): questions are answered from approved and liv
 
 Pill PDFs: every approved pill gets a PDF generated after the DB transaction commits. Seeded pills have PDFs generated on first start and after reset (`ensureSeedPdfs`). `GET /api/pills/:id/pdf` serves the stored PDF, or generates one on demand as a fallback.
 
-Current PDF layout (`server/pdf.ts`) is a plain text dump on A4 with standard Helvetica: header, summary, key-value block, Steps, Guardrails, Tools, built-from / checks / know-how when present, Revisions, Health ratings, and a 7 pt "Synthetic data" footer. It carries no simulation evidence, chart, checklist boxes, approval trail, page numbers or link back to the live pill. Standard fonts cannot encode characters outside WinAnsi (for example `−`, `≥`, `→`, emoji, CJK), so a pill with such text can fail to generate; the failure is only logged as a warning. See "Planned work" for the redesign.
+PDF layout (`server/pdf.ts`, A4, DejaVu Sans embedded via `@pdf-lib/fontkit`, files in `server/assets/`): page 1 is the manager summary. It has a header band with the status as a word, a prominent SYNTHETIC DATA marker, an at-a-glance box (owner, sites, system, domain, applies-to, health as stars plus number), and for pills the simulator models (`Pill.measureId`, or `Pill.measures` + `Pill.tuning` for pills made from a case) a before-and-after demand chart against the 3,000 kW cap, an evidence table (peak, kWh, cost, comfort hours, every board the pill moves) and the three reviewer verdicts. These numbers are re-simulated from `shared/model.ts` when the PDF is made, never stored. Pills the simulator does not model (PILL-0015, PILL-0004, PILL-0009) say "No simulation evidence" instead. Then comes the field checklist: required-check box, steps with checkboxes and a done-by/time column, a red "Stop if…" guardrails box, tools, composed-of, know-how, revisions, health ratings and a blank sign-off block. Every page has page X of Y, pill ID and revision, print date, a "check the live pill" note and the pill's link (`APP_URL` + `/pills/<id>`; the path alone when `APP_URL` is unset). Text the font lacks (CJK, emoji) prints as `?` rather than failing. Each PDF carries a layout marker (`hasCurrentLayout`), so `ensureSeedPdfs` and the download route regenerate PDFs made by an older layout. A PDF is regenerated after the transaction commits whenever a pill is approved or re-approved, and when it is rated.
 
 Seed pills: PILL-0007 chiller soft-start and stagger, PILL-0012 managed EV charging window, PILL-0015 HVAC electrical check before a start-up change (required check), PILL-0004 warm-floor complaint triage, PILL-0009 cooling tower fans on wet-bulb.
 
@@ -147,24 +147,21 @@ Design decisions:
 - Render free tier loses profile changes when the instance sleeps.
 - The Tencent Lighthouse free trial was unavailable on the user's account, hence Render.
 - `POST /api/reset` has no role check: any signed-in persona can wipe the demo data. Fine for a demo, not for anything shared.
-- `server/retrieval.ts` (`synthesizeGemini`) puts `signal: AbortSignal.timeout(...)` inside the JSON request body instead of the `fetch` options, so the 20 s timeout is not applied to the `/api/ask` answer call (it only serialises to `{}`). `search.ts` and `gemini.ts` use it correctly. Fix: move it next to `method` and `headers`.
-- Library page: the expanded pill view is reported to render badly (user report, not yet reproduced or diagnosed).
-- Pill PDFs are plain (see "Pill PDFs" above).
+- Library page tables hide the System, Captured-from and Live-at columns at phone width (CSS only, to avoid sideways scrolling); the full values are on the pill's page.
+- CJK text in a pill prints as `?` in its PDF (DejaVu Sans has no CJK glyphs). Embedding Noto Sans CJK would fix it at several MB.
 
 ## Testing
 
-`npm test` runs 64 tests (all passing at last check) in `server/*.test.ts`: governance and flow (`flow.test.ts`), comment reading (`comments.test.ts`), email (`email.test.ts`), HTTP layer and role checks (`api.test.ts`), static serving (`static.test.ts`), seeded PDFs (`seed-pdfs.test.ts`) and retrieval quality (`eval.test.ts`). `npm run typecheck` is clean. There are no browser or accessibility tests yet.
+`npm test` runs 68 tests (all passing at last check) in `server/*.test.ts`: governance and flow (`flow.test.ts`), comment reading (`comments.test.ts`), email (`email.test.ts`), HTTP layer and role checks (`api.test.ts`), static serving (`static.test.ts`), seeded PDFs (`seed-pdfs.test.ts`), the PDF layout, hostile text and re-simulated evidence (`pdf.test.ts`) and retrieval quality (`eval.test.ts`). `npm run typecheck` is clean. There are no browser or accessibility tests yet.
+
+## Done on 2026-10-10 (this pass)
+
+- Fixed the Pill-and-questions step (wizard step 2): an expanded measure card ("Why it helps, trade-off and chart") no longer slides under the sticky simulation panel. Cause: `.measures` was a grid with no column limit, so the expanded chart stretched the track to 786 px inside a 483 px column; now `grid-template-columns: minmax(0, 1fr)` and `min-width: 0`. Checked at 1280 and 375 px, no sideways scroll.
+- Fixed the regression where a re-approved pill kept its old PDF, and made rating a pill regenerate its PDF (test in `api.test.ts`).
+- Fixed the `/api/ask` answer timeout: `signal` was inside the JSON body in `retrieval.ts`, so it never applied.
+- Redesigned the PDF (see "Pill PDFs"), with `pdf.test.ts`.
 
 ## Planned Work
 
-Decided with the user; not yet built.
-
-- **PDF redesign, for managers and field technicians.** Page 1 is a manager summary: header band with status word and a prominent SYNTHETIC DATA marker, at-a-glance box (owner, sites, system, health as stars plus number), a before-and-after chart of the 96-step demand curve against the 3,000 kW cap (drawn from `simulateMeasures`, never typed in), an evidence table (peak kW, kWh, cost, comfort hours at risk, highest board %, the three reviewer verdicts) and a "Before you start" box for required checks. Later pages are a field checklist: steps with checkboxes and a done-by/time column, guardrails in a "Stop if…" box, tools, know-how, approval and revision history, and a blank sign-off block. Footer on every page: page X of Y, pill ID and revision, print date, "printed copy: check the live pill" and a link.
-- **Evidence on the pill.** Save the case's `Evidence` onto the `Pill` (optional field) when it is approved, so its PDF can show it. Seeded pills with a `measureId` re-simulate that measure. Pills the simulator does not model (PILL-0004, PILL-0009) print "No simulation evidence", never invented numbers.
-- **Embedded Unicode font** (`@pdf-lib/fontkit` plus an OFL font such as Noto Sans), the one planned dependency, so engineer-written text with any characters renders. Missing glyphs become `?` instead of throwing. Chosen over character mapping because the text can be arbitrary and the audience is in Singapore.
-- **Stored PDFs regenerate on layout change** (a layout version stored with each PDF), without overwriting a PDF of a newer approved revision.
-- **Fix the expanded-pill UI** on the Pill library page, then check it at 375, 768 and 1280 px.
-- **Fix the `/api/ask` timeout** noted under Known Issues.
-- Accessibility pass of the web app with Playwright at phone and desktop widths.
-
-See `docs/pipeline/03-build-log.md` for the dated build history.
+- Accessibility pass of the web app with Playwright at phone and desktop widths (only the pill-related screens were checked so far).
+- Optionally restrict `/api/reset` to the manager; today any signed-in persona can wipe the demo data.

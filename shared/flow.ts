@@ -44,6 +44,9 @@ export interface Pill {
   revisions: { rev: number; date: string; by: string; note: string }[];
   ratings: { rating: number; by: string; reason: string; at: string }[];
   caseId?: string;
+  /** What the simulator re-runs for the PDF evidence. Seeded pills use measureId instead. */
+  measures?: MeasureId[];
+  tuning?: Tuning;
 }
 
 /** Pill health is the manager's latest star rating (user decision, 2026-10-04). */
@@ -488,6 +491,8 @@ function pillFromCase(c: Case, d: Decision, pills: Pill[]): Pill {
     revisions: [...(existing?.revisions ?? []), { rev: c.revision, date, by: engineer?.name ?? '', note: c.revision === 1 ? `First issue at ${c.asset}.` : 'Revised after review comments.' }],
     ratings: [...(existing?.ratings ?? []), { rating: d.rating ?? 0, by: d.by, reason: d.reason, at: date }],
     caseId: c.id,
+    measures: [...c.measures],
+    tuning: { ...c.tuning },
   };
 }
 

@@ -528,8 +528,8 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .origin--own { color: var(--own); background: rgba(123, 63, 181, 0.08); }
 .measure--own.measure--on { border-color: var(--own); box-shadow: 0 0 0 1px var(--own); }
 .proposal h2 { margin-bottom: var(--s1); }
-.measures { list-style: none; margin: var(--s4) 0 0; padding: 0; display: grid; gap: var(--s3); }
-.measure { background: var(--sheet); border: 1px solid var(--rule); padding: var(--s3) var(--s4) 0; transition: border-color 0.15s, box-shadow 0.15s; }
+.measures { list-style: none; margin: var(--s4) 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+.measure { min-width: 0; background: var(--sheet); border: 1px solid var(--rule); padding: var(--s3) var(--s4) 0; transition: border-color 0.15s, box-shadow 0.15s; }
 .measure--on { border-color: var(--proposed); box-shadow: 0 0 0 1px var(--proposed); }
 .measure-main { display: flex; align-items: flex-start; gap: var(--s3); }
 .measure-main input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--proposed); flex: none; cursor: pointer; }

@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { seedPills, type AuditEvent, type Case, type Pill, type Profile } from '../shared/flow.ts';
 import { chunkPill } from './chunker.ts';
-import { generatePillPdf } from './pdf.ts';
+import { generatePillPdf, hasCurrentLayout, titleLookup } from './pdf.ts';
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -110,9 +110,9 @@ export function openStore(path: string) {
 
 /** Generate PDFs for any seeded pills that don't have one yet. Idempotent. */
 export async function ensureSeedPdfs(store: Store): Promise<void> {
-  const missing = store.pills().filter((p) => !store.getPdf(p.id));
+  const missing = store.pills().filter((p) => { const row = store.getPdf(p.id); return !row || !hasCurrentLayout(row.pdf); });
   for (const p of missing) {
-    const pdf = await generatePillPdf(p);
+    const pdf = await generatePillPdf(p, titleLookup(store.pills()));
     store.putPdf(p.id, pdf, new Date().toISOString());
   }
   if (missing.length) {

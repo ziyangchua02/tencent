@@ -7,7 +7,7 @@ import {
 import { caseMails, isEmail, sendMail, type Mail } from './email.ts';
 import { readComment } from './gemini.ts';
 import { chunkPill } from './chunker.ts';
-import { generatePillPdf } from './pdf.ts';
+import { generatePillPdf, hasCurrentLayout, titleLookup } from './pdf.ts';
 import { ask } from './retrieval.ts';
 import type { AskResponse } from '../shared/retrieval-types.ts';
 import { ensureSeedPdfs, type Store } from './store.ts';
@@ -69,6 +69,10 @@ export function createApi(store: Store) {
     modelCalls.set(userId, [...times, now]);
     return 0;
   };
+  const refreshPdf = (pill: Pill) => {
+    generatePillPdf(pill, titleLookup(store.pills())).then((pdf) => store.putPdf(pill.id, pdf, new Date().toISOString()))
+      .catch((e) => console.warn(`PDF gen ${pill.id} failed:`, e));
+  };
   /** Send in the background and record each outcome in the audit log, without the address. */
   const deliver = (mails: Mail[], target: string) => {
     for (const m of mails) {
@@ -115,9 +119,9 @@ export function createApi(store: Store) {
         const pill = store.pills().find((p) => p.id === pdfMatch[1]);
         if (!pill) throw new FlowError('No such pill.', 404);
         let row = store.getPdf(pill.id);
-        if (!row) {
-          // Generate on demand if not yet created (e.g. pills seeded before PDF feature).
-          const pdf = await generatePillPdf(pill);
+        if (!row || !hasCurrentLayout(row.pdf)) {
+          // Generate on demand if missing or made by an older layout.
+          const pdf = await generatePillPdf(pill, titleLookup(store.pills()));
           store.putPdf(pill.id, pdf, new Date().toISOString());
           row = store.getPdf(pill.id);
         }
@@ -178,11 +182,13 @@ export function createApi(store: Store) {
           target = store.cases().find((c) => c.id === current.id) ?? current; // the plan may have moved while the agent read
         }
         const final = action;
+        let changedPill: Pill | undefined;
         const saved = store.tx(() => {
           const out = applyAction(target, final, actor, new Date().toISOString(), store.pills());
           store.putCase(out.case);
           if (out.pill) {
             store.putPill(out.pill);
+            changedPill = out.pill;
             // Chunk the pill for search/retrieval on approval or re-approval.
             try {
               store.putChunks(out.pill.id, chunkPill(out.pill));
@@ -191,14 +197,8 @@ export function createApi(store: Store) {
           if (final.type !== 'update') log(final.type, current.id, out.detail);
           return out.case;
         });
-        // Generate the PDF after the commit succeeds so a rollback never leaves an orphan.
-        if (saved.pillId && !store.getPdf(saved.pillId)) {
-          const approvedPill = store.pills().find((p) => p.id === saved.pillId);
-          if (approvedPill) {
-            generatePillPdf(approvedPill).then((pdf) => store.putPdf(approvedPill.id, pdf, new Date().toISOString()))
-              .catch((e) => console.warn(`PDF gen ${approvedPill.id} failed:`, e));
-          }
-        }
+        // Regenerate after the commit succeeds, so a rollback never leaves an orphan and a re-approved revision never keeps its old PDF.
+        if (changedPill) refreshPdf(changedPill);
         changed();
         if (final.type === 'submit' || final.type === 'approve' || final.type === 'return') deliver(caseMails(saved, final.type, people(), baseUrl(req)), saved.id);
         return send(res, 200, { state: state() });
@@ -226,6 +226,7 @@ export function createApi(store: Store) {
         if (!reason) throw new FlowError('Say why the rating changed.', 400);
         const updated: Pill = { ...pill, ratings: [...pill.ratings, { rating: rating as number, by: actor.name, reason, at: now.slice(0, 10) }] };
         store.tx(() => { store.putPill(updated); log('rate', pill.id, `Health set to ${rating} stars: ${reason}`); });
+        refreshPdf(updated); // the PDF lists the health ratings
         changed();
         return send(res, 200, { state: state() });
       }

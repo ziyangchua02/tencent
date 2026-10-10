@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApi } from './api.ts';
-import { openStore } from './store.ts';
+import { ensureSeedPdfs, openStore } from './store.ts';
 import { USERS } from '../shared/flow.ts';
 
 const ENGINEER = USERS.find((u) => u.role === 'engineer')!.id;
@@ -160,4 +160,14 @@ test('rate limit: 11th /api/ask within a minute returns 429', async () => {
   const res = await callApiWith(api, store, 'POST', '/api/ask', { question: 'one too many' }, { 'x-demo-user': MANAGER });
   assert.equal(res._status, 429);
   assert.match(res.json.error, /Too many requests/i);
+});
+
+test('rating a pill regenerates its stored PDF', async () => {
+  const store = makeStore();
+  await ensureSeedPdfs(store);
+  const before = Buffer.from(store.getPdf('PILL-0007')!.pdf);
+  const res = await callApi(store, 'POST', '/api/pills/PILL-0007/rate', { rating: 2, reason: 'Tripped twice.' }, { 'x-demo-user': MANAGER });
+  assert.equal(res._status, 200);
+  for (let i = 0; i < 40 && Buffer.from(store.getPdf('PILL-0007')!.pdf).equals(before); i++) await new Promise((r) => setTimeout(r, 50));
+  assert.ok(!Buffer.from(store.getPdf('PILL-0007')!.pdf).equals(before), 'PDF should be regenerated with the new rating');
 });
