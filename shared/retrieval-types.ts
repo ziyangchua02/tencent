@@ -43,6 +43,8 @@ export interface Answer {
   /** Which model produced the answer: "gemini" or "rules". */
   reader: 'gemini' | 'rules';
   fallbackReason?: string;
+  /** 0 to 1: how well the evidence covers the question. Only set when an answer was given. */
+  confidence?: number;
 }
 
 export interface AskRequest {
@@ -57,8 +59,14 @@ export interface AskResponse {
   role: Role;
 }
 
-/** Minimum FTS5 bm25 score magnitude to consider a hit "strong enough". */
-export const MIN_SCORE = -2.0;
+/** Keyword-only guard: the share of a question's meaningful words that must appear in the evidence. */
+export const MIN_TERM_COVERAGE = 0.5;
 
-/** Minimum number of strong hits to justify an answer (rather than refusing). */
-export const MIN_HITS = 1;
+/**
+ * Embedding guard (gemini-embedding-001 cosine). Calibrated on 18 questions against the 5 seeded pills: real questions scored
+ * 0.70 to 0.82, off-topic ones that share a word scored 0.64 to 0.67. A small sample: re-check after the library grows.
+ * Under this the best chunk is not about the question.
+ */
+export const MIN_SIMILARITY = 0.69;
+/** At or above this, a question phrased in different words from the pill is still accepted. */
+export const CONFIDENT_SIMILARITY = 0.72;

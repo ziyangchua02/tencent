@@ -261,6 +261,9 @@ function AskResult({ answer }: { answer: Answer }) {
       <div className="ask-answer-text">
         {answer.text.split('\n').map((line, i) => <p key={i}>{line}</p>)}
       </div>
+      {answer.confidence !== undefined && (
+        <p className="muted ask-fallback">Evidence match: {Math.round(answer.confidence * 100)}% ({answer.confidence >= 0.72 ? 'strong' : 'moderate'}). Check the citations before acting on it.</p>
+      )}
       {answer.citations.length > 0 && (
         <details className="ask-citations">
           <summary>Citations ({answer.citations.length})</summary>

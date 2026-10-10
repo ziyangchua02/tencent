@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { seedPills, type AuditEvent, type Case, type Pill, type Profile } from '../shared/flow.ts';
 import { chunkPill } from './chunker.ts';
-import { generatePillPdf, hasCurrentLayout, titleLookup } from './pdf.ts';
+import { generatePillPdf, hasCurrentLayout } from './pdf.ts';
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -18,6 +18,7 @@ export function openStore(path: string) {
     create trigger if not exists audit_no_update before update on audit begin select raise(abort, 'audit log is append-only'); end;
     create trigger if not exists audit_no_delete before delete on audit begin select raise(abort, 'audit log is append-only'); end;
     create table if not exists chunks (id text not null, pill_id text not null, section text not null, ordinal int not null, text text not null, primary key (pill_id, section, ordinal));
+    create table if not exists embed_cache (key text primary key, vec text not null);
     create table if not exists pdf_store (pill_id text primary key, pdf blob not null, at text not null);
   `);
   const ensureFts = () => db.exec(`
@@ -71,6 +72,12 @@ export function openStore(path: string) {
         limit ?
       `).all(query, limit) as { id: string; pill_id: string; section: string; ordinal: number; text: string; score: number }[],
     /** Store a generated PDF blob for a pill. */
+    /** Cached embedding vectors, keyed by a hash of model + task + text, so a chunk is embedded once. */
+    getVec: (key: string) => {
+      const row = db.prepare('select vec from embed_cache where key = ?').get(key) as { vec: string } | undefined;
+      return row ? (JSON.parse(row.vec) as number[]) : null;
+    },
+    putVec: (key: string, vec: number[]) => { db.prepare('insert or replace into embed_cache (key, vec) values (?, ?)').run(key, JSON.stringify(vec)); },
     putPdf: (pillId: string, pdf: Uint8Array, at: string) =>
       db.prepare('insert into pdf_store (pill_id, pdf, at) values (?, ?, ?) on conflict (pill_id) do update set pdf = excluded.pdf, at = excluded.at')
         .run(pillId, pdf, at),
@@ -112,7 +119,7 @@ export function openStore(path: string) {
 export async function ensureSeedPdfs(store: Store): Promise<void> {
   const missing = store.pills().filter((p) => { const row = store.getPdf(p.id); return !row || !hasCurrentLayout(row.pdf); });
   for (const p of missing) {
-    const pdf = await generatePillPdf(p, titleLookup(store.pills()));
+    const pdf = await generatePillPdf(p, store.pills());
     store.putPdf(p.id, pdf, new Date().toISOString());
   }
   if (missing.length) {

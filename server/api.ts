@@ -7,7 +7,7 @@ import {
 import { caseMails, isEmail, sendMail, type Mail } from './email.ts';
 import { readComment } from './gemini.ts';
 import { chunkPill } from './chunker.ts';
-import { generatePillPdf, hasCurrentLayout, titleLookup } from './pdf.ts';
+import { generatePillPdf, hasCurrentLayout } from './pdf.ts';
 import { ask } from './retrieval.ts';
 import type { AskResponse } from '../shared/retrieval-types.ts';
 import { ensureSeedPdfs, type Store } from './store.ts';
@@ -70,7 +70,7 @@ export function createApi(store: Store) {
     return 0;
   };
   const refreshPdf = (pill: Pill) => {
-    generatePillPdf(pill, titleLookup(store.pills())).then((pdf) => store.putPdf(pill.id, pdf, new Date().toISOString()))
+    generatePillPdf(pill, store.pills()).then((pdf) => store.putPdf(pill.id, pdf, new Date().toISOString()))
       .catch((e) => console.warn(`PDF gen ${pill.id} failed:`, e));
   };
   /** Send in the background and record each outcome in the audit log, without the address. */
@@ -121,7 +121,7 @@ export function createApi(store: Store) {
         let row = store.getPdf(pill.id);
         if (!row || !hasCurrentLayout(row.pdf)) {
           // Generate on demand if missing or made by an older layout.
-          const pdf = await generatePillPdf(pill, titleLookup(store.pills()));
+          const pdf = await generatePillPdf(pill, store.pills());
           store.putPdf(pill.id, pdf, new Date().toISOString());
           row = store.getPdf(pill.id);
         }
@@ -240,7 +240,7 @@ export function createApi(store: Store) {
         const result = await ask(store, question, store.pills(), actor.role);
         const detail = result.answer.refused
           ? `Refused: ${result.answer.reason}`
-          : `Answered (${result.answer.reader}${result.answer.fallbackReason ? ', fallback' : ''}) with ${result.answer.citations.length} citation(s).`;
+          : `Answered (${result.answer.reader}${result.answer.fallbackReason ? ', fallback' : ''}) with ${result.answer.citations.length} citation(s), confidence ${Math.round((result.answer.confidence ?? 0) * 100)}%.`;
         log('ask', 'library', `Q: "${question.slice(0, 200)}". ${detail}`);
         changed();
         const response: AskResponse = { answer: result.answer, question, at: now, actor: actor.name, role: actor.role };

@@ -72,10 +72,15 @@ test('ask: "steps" returns step sections', async () => {
   assert.ok(answer.citations.some((c) => c.section === 'steps'), 'should cite a steps section');
 });
 
-test('ask: "know-how" returns captured Q&A', async () => {
+test('ask: "know-how" is answered when a pill carries captured know-how, and refused when none does', async () => {
   const store = freshStore();
-  const { answer } = await ask(store, 'What know-how was captured from the engineer?', pills, engineer.role);
-  assert.equal(answer.refused, false);
+  const none = await ask(store, 'What know-how was captured from the engineer?', pills, engineer.role);
+  assert.equal(none.answer.refused, true, 'the seeded pills hold no captured know-how');
+  const withKnowHow = { ...pills[0], knowHow: [{ question: 'What did the engineer capture about the surge?', answer: 'Wait 35 minutes between chiller starts.' }] };
+  store.putChunks(withKnowHow.id, chunkPill(withKnowHow));
+  const some = await ask(store, 'What know-how was captured from the engineer?', [withKnowHow, ...pills.slice(1)], engineer.role);
+  assert.equal(some.answer.refused, false);
+  assert.ok(some.answer.citations.some((c) => c.section === 'know-how'));
 });
 
 // ---------- refusal on weak evidence ----------
@@ -97,6 +102,24 @@ test('ask: unrelated topic is refused', async () => {
   const store = freshStore();
   const { answer } = await ask(store, 'How do I bake a chocolate cake?', pills, engineer.role);
   assert.equal(answer.refused, true, 'should refuse — no baking pills in the library');
+});
+
+test('ask: a question that shares one word with a pill is refused, not answered from it', async () => {
+  const store = freshStore();
+  for (const q of ['What is the capital of France and what chiller colour is best?', 'recipe for chicken rice with a tools budget', 'weather forecast tomorrow']) {
+    const { answer } = await ask(store, q, pills, engineer.role);
+    assert.equal(answer.refused, true, `should refuse: ${q}`);
+    assert.equal(answer.citations.length, 0);
+  }
+});
+
+test('ask: real questions about the library are still answered, with a confidence', async () => {
+  const store = freshStore();
+  for (const q of ['How do I stagger the chillers?', 'Who owns the EV charging pill?', 'electrical check before startup', 'What tools do I need?', 'which pill has the best rating']) {
+    const { answer } = await ask(store, q, pills, engineer.role);
+    assert.equal(answer.refused, false, `should answer: ${q}`);
+    assert.ok((answer.confidence ?? 0) >= 0.5, `confidence for: ${q}`);
+  }
 });
 
 // ---------- role filtering ----------
@@ -260,4 +283,18 @@ test('ask: audit-worthy — every question produces a consistent shape', async (
     assert.ok(typeof answer.reason === 'string');
     assert.ok(answer.sources !== undefined);
   }
+});
+
+// ---------- the guard's decision rule, with fixed numbers (no network) ----------
+
+test('judge: embedding similarity decides, and a shared word cannot rescue a weak match', async () => {
+  const { judge } = await import('./retrieval.ts');
+  const store = freshStore();
+  const { search } = await ask(store, 'How do I stagger the chillers?', pills, engineer.role);
+  const hits = search.hits;
+  assert.equal(judge('stagger the chillers', hits, 0.8).ok, true, 'clearly about it');
+  assert.equal(judge('stagger the chillers', hits, 0.7).ok, true, 'close, and the words match');
+  assert.equal(judge('stagger the chillers', hits, 0.66).ok, false, 'a shared word at 0.66 (the car-tyre case) is refused');
+  assert.equal(judge('car tyre chillers', hits, 0.7).ok, false, 'close but the words do not match');
+  assert.equal(judge('car tyre chillers', hits, 0.75).ok, true, 'different words, but clearly about it');
 });

@@ -47,6 +47,10 @@ export interface Pill {
   /** What the simulator re-runs for the PDF evidence. Seeded pills use measureId instead. */
   measures?: MeasureId[];
   tuning?: Tuning;
+  /** The problem the engineer described on the originating case: the document's purpose. */
+  problem?: string;
+  /** Who approved each revision. A pill is never released without one. */
+  approvals?: { rev: number; by: string; title: string; at: string; reason?: string }[];
 }
 
 /** Pill health is the manager's latest star rating (user decision, 2026-10-04). */
@@ -54,7 +58,7 @@ export const health = (p: Pill) => p.ratings.at(-1)?.rating ?? null;
 export const currentRev = (p: Pill) => p.revisions.at(-1)?.rev ?? 1;
 
 export function seedPills(): Pill[] {
-  return [
+  const pills: Pill[] = [
     {
       id: 'PILL-0007', title: 'Chiller soft-start and stagger', domain: 'Technical Services', system: 'HVAC · chiller plant',
       summary: 'Start chillers one at a time at part load, so their start-up surges never stack on the chiller power board.',
@@ -150,6 +154,9 @@ export function seedPills(): Pill[] {
       ratings: [{ rating: 3, by: 'Priya Nair', reason: 'Saves energy, but the weather station drops out in heavy rain.', at: '2025-09-11' }],
     },
   ];
+  // Synthetic like the rest of the seed: every seeded revision was approved by the manager persona on its issue date.
+  const manager = USERS.find((u) => u.role === 'manager')!;
+  return pills.map((p) => ({ ...p, approvals: p.revisions.map((r) => ({ rev: r.rev, by: manager.name, title: manager.title, at: r.date })) }));
 }
 
 export type MatchRole = 'measure' | 'check' | 'related' | 'none';
@@ -493,6 +500,8 @@ function pillFromCase(c: Case, d: Decision, pills: Pill[]): Pill {
     caseId: c.id,
     measures: [...c.measures],
     tuning: { ...c.tuning },
+    problem: c.problem,
+    approvals: [...(existing?.approvals ?? []), { rev: c.revision, by: d.by, title: USERS.find((u) => u.name === d.by)?.title ?? 'Manager', at: date, reason: d.reason }],
   };
 }
 

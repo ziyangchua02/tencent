@@ -1,18 +1,23 @@
 // Hybrid search: FTS5 keyword + optional Gemini text-embeddings (cosine similarity in JS).
 // Falls back to keyword-only when no Gemini key is set.
+import { createHash } from 'node:crypto';
 import type { Pill } from '../shared/flow.ts';
 import type { SearchHit, Chunk } from '../shared/retrieval-types.ts';
 import type { Store } from './store.ts';
 
 export interface FtsRow { id: string; pill_id: string; section: string; ordinal: number; text: string; score: number }
 
+const STOPWORDS = new Set(['which', 'pill', 'pills', 'best', 'need', 'tell', 'show', 'give', 'please', 'any', 'there', 'much', 'many', 'a', 'an', 'the', 'do', 'does', 'is', 'are', 'was', 'were', 'how', 'what', 'why', 'who', 'when', 'where', 'i', 'you', 'we', 'they', 'it', 'this', 'that', 'to', 'for', 'of', 'in', 'on', 'at', 'and', 'or', 'but', 'with', 'from', 'about', 'can', 'should', 'would', 'could', 'will', 'my', 'our', 'their', 'be', 'have', 'has', 'had']);
+
+/** The meaningful words in a question: lower-case, no stopwords. Shared by the keyword query and the confidence guard. */
+export function queryTerms(input: string): string[] {
+  const cleaned = input.trim().toLowerCase().replace(/["*]/g, ' ').replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ');
+  return cleaned ? cleaned.split(' ').filter((w) => w.length > 1 && !STOPWORDS.has(w)) : [];
+}
+
 /** Build an FTS5 query from user input: use OR semantics on significant words. */
 function ftsQuery(input: string): string {
-  const stopwords = new Set(['a', 'an', 'the', 'do', 'does', 'is', 'are', 'was', 'were', 'how', 'what', 'why', 'who', 'when', 'where', 'i', 'you', 'we', 'they', 'it', 'this', 'that', 'to', 'for', 'of', 'in', 'on', 'at', 'and', 'or', 'but', 'with', 'from', 'about', 'can', 'should', 'would', 'could', 'will', 'my', 'our', 'their', 'be', 'have', 'has', 'had']);
-  const cleaned = input.trim().toLowerCase().replace(/["*]/g, ' ').replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ');
-  if (!cleaned) return '';
-  const words = cleaned.split(' ').filter((w) => w.length > 1 && !stopwords.has(w));
-  if (!words.length) return '';
+  const words = queryTerms(input);
   return words.map((w) => `"${w}"`).join(' OR ');
 }
 
@@ -38,25 +43,36 @@ export function keywordSearch(store: Store, query: string, limit = 20): FtsRow[]
   }
 }
 
+const EMBED_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const embedModel = () => process.env.GEMINI_EMBED_MODEL?.trim() || 'gemini-embedding-001';
+
 /**
- * Optional: get text embeddings from Gemini. Returns null when no key is set.
- * Each vector is 768 dimensions (text-embedding-004). Cosine similarity in JS.
+ * Embed texts with Gemini, one batch call for everything not already cached. A text that fails comes back null.
+ * Vectors are cached by hash of model + task + text, so a pill chunk is embedded once, not on every question.
  */
-async function embed(text: string, key: string): Promise<number[] | null> {
-  const model = process.env.GEMINI_EMBED_MODEL?.trim() || 'text-embedding-004';
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ model: `models/${model}`, content: { parts: [{ text }] }, taskType: 'RETRIEVAL_QUERY' }),
-      signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS) || 20_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { embedding?: { values?: number[] } };
-    return data.embedding?.values ?? null;
-  } catch {
-    return null;
+export async function embedTexts(store: Store, texts: string[], key: string, taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT'): Promise<(number[] | null)[]> {
+  const model = embedModel();
+  const keys = texts.map((t) => createHash('sha256').update(`${model}|${taskType}|${t}`).digest('hex'));
+  const out: (number[] | null)[] = keys.map((k) => store.getVec(k));
+  const todo = out.flatMap((v, i) => (v ? [] : [i]));
+  for (let from = 0; from < todo.length; from += 100) {
+    const slice = todo.slice(from, from + 100);
+    try {
+      const res = await fetch(`${EMBED_BASE}/${encodeURIComponent(model)}:batchEmbedContents`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({ requests: slice.map((i) => ({ model: `models/${model}`, content: { parts: [{ text: texts[i] }] }, taskType })) }),
+        signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS) || 20_000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as { embeddings?: { values?: number[] }[] };
+      slice.forEach((i, n) => {
+        const v = data.embeddings?.[n]?.values;
+        if (v?.length) { out[i] = v; store.putVec(keys[i], v); }
+      });
+    } catch { /* leave those texts null: the caller falls back to keywords */ }
   }
+  return out;
 }
 
 /** Cosine similarity between two vectors. */
@@ -70,6 +86,8 @@ function cosine(a: number[], b: number[]): number {
 export interface SearchResult {
   hits: SearchHit[];
   usedEmbeddings: boolean;
+  /** Cosine similarity of the best chunk to the question. Only set when embeddings were used. */
+  topSimilarity?: number;
   fallbackReason?: string;
 }
 
@@ -107,7 +125,7 @@ export async function hybridSearch(
   }
 
   // Try embedding the query
-  const qVec = await embed(query, key);
+  const [qVec] = await embedTexts(store, [query], key, 'RETRIEVAL_QUERY');
   if (!qVec) {
     return {
       hits: ftsRows.slice(0, limit).map((r) => toHit(r, 'fts5', -r.score)),
@@ -116,21 +134,20 @@ export async function hybridSearch(
     };
   }
 
-  // Embed each FTS candidate chunk text and re-rank by cosine similarity.
-  // This is O(n) API calls but n is small (≤30) and cached at the FTS level.
-  const scored: { row: FtsRow; sim: number }[] = [];
-  for (const row of ftsRows) {
-    const vec = await embed(row.text, key);
-    if (vec) scored.push({ row, sim: cosine(qVec, vec) });
-    else scored.push({ row, sim: 0 });
+  // Embed the candidate chunks (one batch, cached) and re-rank by cosine similarity.
+  const vecs = await embedTexts(store, ftsRows.map((r) => r.text), key, 'RETRIEVAL_DOCUMENT');
+  if (vecs.some((v) => !v)) {
+    return {
+      hits: ftsRows.slice(0, limit).map((r) => toHit(r, 'fts5', -r.score)),
+      usedEmbeddings: false,
+      fallbackReason: 'Gemini embedding failed; keyword search only.',
+    };
   }
-  scored.sort((a, b) => b.sim - a.sim);
+  const scored = ftsRows.map((row, i) => ({ row, sim: cosine(qVec, vecs[i]!) })).sort((a, b) => b.sim - a.sim);
 
   return {
-    hits: scored.slice(0, limit).map((s) => {
-      const alsoFts = true; // all candidates came from FTS5
-      return toHit(s.row, alsoFts ? 'both' : 'embedding', s.sim);
-    }),
+    hits: scored.slice(0, limit).map((s) => toHit(s.row, 'both', s.sim)), // every candidate came from FTS5
     usedEmbeddings: true,
+    topSimilarity: scored[0]?.sim,
   };
 }
