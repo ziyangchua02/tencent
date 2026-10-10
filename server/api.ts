@@ -6,6 +6,10 @@ import {
 } from '../shared/flow.ts';
 import { caseMails, isEmail, sendMail, type Mail } from './email.ts';
 import { readComment } from './gemini.ts';
+import { chunkPill } from './chunker.ts';
+import { generatePillPdf } from './pdf.ts';
+import { ask } from './retrieval.ts';
+import type { AskResponse } from '../shared/retrieval-types.ts';
 import type { Store } from './store.ts';
 
 type Next = () => void;
@@ -93,6 +97,30 @@ export function createApi(store: Store) {
         return;
       }
 
+      const pdfMatch = path.match(/^\/api\/pills\/(PILL-\d{4})\/pdf$/);
+      if (req.method === 'GET' && pdfMatch) {
+        const me = userById(String(req.headers['x-demo-user'] ?? ''));
+        if (!me) throw new FlowError('Sign in first.', 401);
+        const pill = store.pills().find((p) => p.id === pdfMatch[1]);
+        if (!pill) throw new FlowError('No such pill.', 404);
+        let row = store.getPdf(pill.id);
+        if (!row) {
+          // Generate on demand if not yet created (e.g. pills seeded before PDF feature).
+          const pdf = await generatePillPdf(pill);
+          store.putPdf(pill.id, pdf, new Date().toISOString());
+          row = store.getPdf(pill.id);
+        }
+        const buf = Buffer.from(row!.pdf);
+        res.writeHead(200, {
+          'content-type': 'application/pdf',
+          'content-disposition': `inline; filename="${pill.id}.pdf"`,
+          'content-length': buf.length,
+          'cache-control': 'no-store',
+        });
+        res.end(buf);
+        return;
+      }
+
       if (req.method !== 'POST') throw new FlowError('Not found.', 404);
       const actor = userById(String(req.headers['x-demo-user'] ?? ''));
       if (!actor) throw new FlowError('Sign in first.', 401);
@@ -140,7 +168,16 @@ export function createApi(store: Store) {
         const saved = store.tx(() => {
           const out = applyAction(target, final, actor, new Date().toISOString(), store.pills());
           store.putCase(out.case);
-          if (out.pill) store.putPill(out.pill);
+          if (out.pill) {
+            store.putPill(out.pill);
+            // Generate PDF and chunk the pill for search/retrieval on approval or re-approval.
+            try {
+              store.putChunks(out.pill.id, chunkPill(out.pill));
+            } catch (e) { console.warn(`Chunking ${out.pill.id} failed:`, e); }
+            void generatePillPdf(out.pill).then((pdf) => {
+              try { store.putPdf(out.pill!.id, pdf, new Date().toISOString()); } catch (e) { console.warn(`PDF store ${out.pill!.id} failed:`, e); }
+            }).catch((e) => console.warn(`PDF gen ${out.pill!.id} failed:`, e));
+          }
           if (final.type !== 'update') log(final.type, current.id, out.detail);
           return out.case;
         });
@@ -173,6 +210,20 @@ export function createApi(store: Store) {
         store.tx(() => { store.putPill(updated); log('rate', pill.id, `Health set to ${rating} stars: ${reason}`); });
         changed();
         return send(res, 200, { state: state() });
+      }
+
+      if (path === '/api/ask') {
+        const question = typeof body.question === 'string' ? body.question.trim() : '';
+        if (!question) throw new FlowError('Write a question.', 400);
+        if (question.length > 1000) throw new FlowError('Keep the question under 1,000 characters.', 400);
+        const result = await ask(store, question, store.pills(), actor.role);
+        const detail = result.answer.refused
+          ? `Refused: ${result.answer.reason}`
+          : `Answered (${result.answer.reader}${result.answer.fallbackReason ? ', fallback' : ''}) with ${result.answer.citations.length} citation(s).`;
+        log('ask', 'library', `Q: "${question.slice(0, 200)}". ${detail}`);
+        changed();
+        const response: AskResponse = { answer: result.answer, question, at: now, actor: actor.name, role: actor.role };
+        return send(res, 200, { ...response, state: state() });
       }
 
       if (path === '/api/profile') {

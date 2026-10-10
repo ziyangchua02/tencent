@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { currentRev, health, userById, type Pill } from '../../shared/flow.ts';
+import type { Answer, Citation } from '../../shared/retrieval-types.ts';
 import { NotFound } from './engineer.tsx';
 import { Link, useApp } from './state.tsx';
 import { Icon, StarInput, Stars, TitleBlock, when } from './ui.tsx';
@@ -34,6 +35,7 @@ export function LibraryPage() {
         </label>
         <span className="muted" aria-live="polite">{shown.length} of {state.pills.length} pills</span>
       </div>
+      <AskPanel />
       <section className="viewport">
         <div className="scroll-x">
           <table className="register">
@@ -73,7 +75,7 @@ export function PillPage({ id }: { id: string }) {
           <h1>{p.title}</h1>
           <p className="lead">{p.summary}</p>
         </div>
-        <span className={`stamp stamp--${p.status}`}>{p.status === 'live' ? `Live · ${p.sites.length} site${p.sites.length === 1 ? '' : 's'}` : 'Approved'}</span>
+        <PdfButton pillId={p.id} />
       </div>
       <div className="grid grid--pill">
         <div className="pill-body">
@@ -164,9 +166,131 @@ function HealthPanel({ p, canRate }: { p: Pill; canRate: boolean }) {
   );
 }
 
+function PdfButton({ pillId }: { pillId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const download = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/pills/${pillId}/pdf`, { headers: { 'x-demo-user': sessionStorage.getItem('ip.user') ?? '' } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load PDF.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="pdf-button-wrap">
+      <button type="button" className="btn" onClick={download} disabled={busy} aria-busy={busy || undefined} aria-label={`Download ${pillId} as PDF`} accessKey="p">
+        {busy ? 'Generating…' : 'PDF'}<Icon name="doc" size={16} />
+      </button>
+      {error && <span className="muted" role="alert">{error}</span>}
+    </div>
+  );
+}
+
+function AskPanel() {
+  const { post } = useApp();
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await post('/api/ask', { question: q });
+    setBusy(false);
+    if (r.ok && r.data?.answer) {
+      setAnswer(r.data.answer as Answer);
+    } else {
+      setError((r.data?.error as string) ?? 'Could not get an answer.');
+    }
+  };
+
+  return (
+    <section className="ask-panel" aria-label="Ask the pill library">
+      <form onSubmit={submit} className="ask-form">
+        <label className="filter-search ask-input">
+          <Icon name="mic" size={16} />
+          <span className="sr-only">Ask a question</span>
+          <input
+            type="text"
+            placeholder="Ask the pill library…  e.g. How do I stagger chiller starts?"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setAnswer(null); setError(null); } }}
+            aria-label="Ask the pill library a question"
+            accessKey="a"
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={!question.trim() || busy} aria-busy={busy || undefined}>
+          {busy ? 'Searching…' : 'Ask'}<Icon name="arrowRight" size={16} />
+        </button>
+      </form>
+      {error && <p className="ask-error" role="alert"><Icon name="alert" size={14} />{error}</p>}
+      {answer && <AskResult answer={answer} />}
+    </section>
+  );
+}
+
+function AskResult({ answer }: { answer: Answer }) {
+  if (answer.refused) {
+    return (
+      <div className="ask-answer ask-refused" role="status">
+        <p><Icon name="info" size={16} />{answer.reason}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="ask-answer" role="region" aria-label="Answer from the pill library">
+      <div className="ask-answer-text">
+        {answer.text.split('\n').map((line, i) => <p key={i}>{line}</p>)}
+      </div>
+      {answer.citations.length > 0 && (
+        <details className="ask-citations">
+          <summary>Citations ({answer.citations.length})</summary>
+          <ul className="citation-list">
+            {answer.citations.map((c, i) => <CitationItem key={i} c={c} index={i} />)}
+          </ul>
+        </details>
+      )}
+      {answer.fallbackReason && <p className="muted ask-fallback"><Icon name="info" size={12} />{answer.fallbackReason}</p>}
+    </div>
+  );
+}
+
+function CitationItem({ c, index }: { c: Citation; index: number }) {
+  return (
+    <li className="citation-item">
+      <span className="citation-num">[{index + 1}]</span>
+      <div>
+        <Link to={`/pills/${c.pillId}`} className="citation-pill">{c.pillId}</Link>
+        <span className="muted"> · {c.pillTitle} · {c.section}</span>
+        <p className="citation-text">{c.text}</p>
+      </div>
+    </li>
+  );
+}
+
 const ACTION_WORDS: Record<string, string> = {
   open: 'Opened case', runAgent: 'Agent proposed', replan: 'Agent re-planned', submit: 'Issued for approval', redo: 'Reopened to revise',
   approve: 'Approved', return: 'Returned', execute: 'Executed', sample: 'Loaded sample', rate: 'Updated health', reset: 'Reset demo', seed: 'Seeded library',
+  ask: 'Asked library',
 };
 
 export function AuditPage() {

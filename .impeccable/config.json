@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-10-05T04:51:16.169Z",
+        "reason": "Claude: Arial is used only in server/email.ts as the email-safe font for notification HTML; Gmail and Outlook drop web fonts, so the app's Barlow can't be relied on there"
+      }
+    ]
+  }
+}

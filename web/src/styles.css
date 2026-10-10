@@ -641,6 +641,27 @@ textarea::placeholder, input::placeholder { color: #6e7a86; }
 .rerate { margin-top: var(--s4); padding-top: var(--s2); border-top: 2px solid var(--ink); display: grid; gap: var(--s2); justify-items: start; }
 .rerate .field { width: 100%; }
 
+/* ---------- ask panel (retrieval) ---------- */
+
+.ask-panel { background: var(--sheet); border: 1px solid var(--rule); padding: var(--s4); margin-bottom: var(--s4); }
+.ask-form { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.ask-input { flex: 1 1 360px; max-width: 540px; }
+.ask-error { display: flex; gap: var(--s2); align-items: center; color: var(--rev); margin: var(--s2) 0 0; font-size: 0.88rem; }
+.ask-answer { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--rule); }
+.ask-answer-text p { margin: 0 0 var(--s2); }
+.ask-refused { display: flex; gap: var(--s2); align-items: flex-start; color: var(--ink-2); }
+.ask-refused .icon { color: var(--proposed); margin-top: 3px; }
+.ask-citations { margin-top: var(--s3); }
+.ask-citations summary { cursor: pointer; font-family: var(--cond); font-weight: 600; font-size: 0.85rem; color: var(--ink-2); }
+.citation-list { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; gap: var(--s3); }
+.citation-item { display: flex; gap: var(--s2); align-items: flex-start; }
+.citation-num { font-family: var(--cond); font-weight: 700; color: var(--proposed); flex: none; }
+.citation-pill { font-weight: 600; }
+.citation-text { margin: var(--s1) 0 0; font-size: 0.88rem; color: var(--ink-2); }
+.ask-fallback { display: flex; gap: 4px; align-items: center; margin-top: var(--s2); font-size: 0.82rem; }
+.pdf-button-wrap { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.case-head .pdf-button-wrap { align-self: center; }
+
 /* ---------- sign in ---------- */
 
 .login { min-height: 100vh; }
